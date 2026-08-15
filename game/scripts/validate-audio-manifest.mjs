@@ -1,0 +1,75 @@
+import { access, readFile, stat } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const gameRoot = path.resolve(scriptDirectory, "..");
+const audioRoot = path.join(gameRoot, "public", "audio", "douluo");
+const manifestPath = path.join(audioRoot, "music_manifest.json");
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+async function main() {
+  await access(manifestPath);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  assert(Array.isArray(manifest.cues), "manifest.cues 必须是数组");
+
+  const ids = new Set();
+  let loopCount = 0;
+  let stingerCount = 0;
+
+  for (const [index, cue] of manifest.cues.entries()) {
+    const label = `第 ${index + 1} 条音乐`;
+    assert(isNonEmptyString(cue.id), `${label}缺少 id`);
+    assert(!ids.has(cue.id), `音乐 ID 重复：${cue.id}`);
+    ids.add(cue.id);
+
+    assert(cue.type === "loop" || cue.type === "stinger", `${cue.id} 的 type 无效`);
+    assert(isNonEmptyString(cue.file), `${cue.id} 缺少 file`);
+    assert(!path.isAbsolute(cue.file), `${cue.id} 的 file 不能是绝对路径`);
+    assert(!cue.file.split(/[\\/]/).includes(".."), `${cue.id} 的 file 不能越出音频目录`);
+    assert(path.extname(cue.file).toLowerCase() === ".ogg", `${cue.id} 必须引用 OGG 文件`);
+
+    const resolvedFile = path.resolve(audioRoot, cue.file);
+    assert(resolvedFile.startsWith(`${audioRoot}${path.sep}`), `${cue.id} 的文件路径无效`);
+    await access(resolvedFile);
+    const fileStats = await stat(resolvedFile);
+    assert(fileStats.isFile() && fileStats.size > 0, `${cue.id} 引用的音频文件为空或无效`);
+
+    assert(Number.isFinite(cue.duration_seconds) && cue.duration_seconds > 0, `${cue.id} 的时长无效`);
+    assert(Number.isFinite(cue.priority), `${cue.id} 的优先级无效`);
+
+    if (cue.type === "loop") {
+      loopCount += 1;
+      assert(Array.isArray(cue.tags) && cue.tags.length > 0, `${cue.id} 缺少场景标签`);
+      assert(Number.isFinite(cue.loop_start_seconds) && cue.loop_start_seconds >= 0, `${cue.id} 的循环起点无效`);
+      assert(
+        Number.isFinite(cue.loop_end_seconds) && cue.loop_end_seconds > cue.loop_start_seconds,
+        `${cue.id} 的循环终点无效`,
+      );
+      assert(cue.loop_end_seconds <= cue.duration_seconds + 0.05, `${cue.id} 的循环终点超出音频时长`);
+    } else {
+      stingerCount += 1;
+      assert(Array.isArray(cue.events) && cue.events.length > 0, `${cue.id} 缺少事件映射`);
+      assert(Number.isFinite(cue.duck_bgm_db) && cue.duck_bgm_db <= 0, `${cue.id} 的背景压低值无效`);
+      assert(typeof cue.resume_previous_bgm === "boolean", `${cue.id} 缺少恢复背景音乐设置`);
+    }
+  }
+
+  assert(loopCount === 8, `循环 BGM 数量应为 8，实际为 ${loopCount}`);
+  assert(stingerCount === 6, `短过场数量应为 6，实际为 ${stingerCount}`);
+  assert(ids.size === 14, `音乐总数应为 14，实际为 ${ids.size}`);
+
+  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短过场，音乐 ID 均唯一。`);
+}
+
+main().catch((error) => {
+  console.error(`音频 manifest 校验失败：${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+});
