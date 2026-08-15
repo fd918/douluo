@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "project": "斗罗大陆人生模拟器原创动态音乐",
+  "default_fade_seconds": 1.5,
+  "minimum_hold_seconds": 16,
+  "cues": [
+    {
+      "id": "bgm_notting_daily",
+      "name": "诺丁初晴",
+      "type": "loop",
+      "file": "loops/bgm_notting_daily.ogg",
+      "duration_seconds": 20.87,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 20.87,
+      "bpm": 92,
+      "key": "D大调五声",
+      "use": "诺丁城、学院与日常探索",
+      "tags": [
+        "notting_city",
+        "notting_academy",
+        "daily"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_blue_silver_mystery",
+      "name": "蓝银微光",
+      "type": "loop",
+      "file": "loops/bgm_blue_silver_mystery.ogg",
+      "duration_seconds": 29.091,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 29.091,
+      "bpm": 66,
+      "key": "D小调",
+      "use": "旧井、脚印、魂力实验与谜团",
+      "tags": [
+        "old_well",
+        "underground_lab",
+        "mystery"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_shrek_training",
+      "name": "怪物晨练",
+      "type": "loop",
+      "file": "loops/bgm_shrek_training.ogg",
+      "duration_seconds": 17.143,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 17.143,
+      "bpm": 112,
+      "key": "E小调",
+      "use": "史莱克训练、考核与团队行动",
+      "tags": [
+        "shrek_academy",
+        "shrek_mirror_forest",
+        "training",
+        "intensity_2"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_star_dou_forest",
+      "name": "星斗林语",
+      "type": "loop",
+      "file": "loops/bgm_star_dou_forest.ogg",
+      "duration_seconds": 24.615,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 24.615,
+      "bpm": 78,
+      "key": "A小调五声",
+      "use": "星斗大森林与魂兽探索",
+      "tags": [
+        "star_dou_forest",
+        "wilderness",
+        "exploration"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_tension",
+      "name": "暗线逼近",
+      "type": "loop",
+      "file": "loops/bgm_tension.ogg",
+      "duration_seconds": 25.946,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 25.946,
+      "bpm": 74,
+      "key": "C小调",
+      "use": "追踪、埋伏与战前紧张",
+      "tags": [
+        "danger",
+        "pursuit",
+        "prebattle",
+        "intensity_2"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_soul_battle",
+      "name": "魂环共振",
+      "type": "loop",
+      "file": "loops/bgm_soul_battle.ogg",
+      "duration_seconds": 14.545,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 14.545,
+      "bpm": 132,
+      "key": "D小调五声",
+      "use": "魂师战斗与强敌交锋",
+      "tags": [
+        "soul_arena",
+        "battle",
+        "combat",
+        "intensity_3"
+      ],
+      "priority": 60,
+      "fade_in_seconds": 0.6,
+      "fade_out_seconds": 0.8
+    },
+    {
+      "id": "bgm_academy_bond",
+      "name": "伙伴灯火",
+      "type": "loop",
+      "file": "loops/bgm_academy_bond.ogg",
+      "duration_seconds": 27.429,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 27.429,
+      "bpm": 70,
+      "key": "G大调",
+      "use": "伙伴、回忆与安静对话",
+      "tags": [
+        "academy",
+        "bond",
+        "warm",
+        "memory"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "bgm_distant_sea",
+      "name": "远海星潮",
+      "type": "loop",
+      "file": "loops/bgm_distant_sea.ogg",
+      "duration_seconds": 25.263,
+      "loop_start_seconds": 0,
+      "loop_end_seconds": 25.263,
+      "bpm": 76,
+      "key": "E小调",
+      "use": "海神岛远景与庄严时刻",
+      "tags": [
+        "sea_god_island",
+        "solemn",
+        "distant"
+      ],
+      "priority": 40,
+      "fade_in_seconds": 1.5,
+      "fade_out_seconds": 1.5
+    },
+    {
+      "id": "stinger_martial_soul",
+      "name": "武魂觉醒",
+      "type": "stinger",
+      "file": "stingers/stinger_martial_soul.ogg",
+      "duration_seconds": 4.9,
+      "events": [
+        "martial_soul_awakened"
+      ],
+      "priority": 90,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": true
+    },
+    {
+      "id": "stinger_soul_ring",
+      "name": "魂环入体",
+      "type": "stinger",
+      "file": "stingers/stinger_soul_ring.ogg",
+      "duration_seconds": 5.3,
+      "events": [
+        "soul_ring_absorbed"
+      ],
+      "priority": 100,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": true
+    },
+    {
+      "id": "stinger_breakthrough",
+      "name": "魂力突破",
+      "type": "stinger",
+      "file": "stingers/stinger_breakthrough.ogg",
+      "duration_seconds": 6.2,
+      "events": [
+        "level_breakthrough"
+      ],
+      "priority": 90,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": true
+    },
+    {
+      "id": "stinger_boss",
+      "name": "强敌现身",
+      "type": "stinger",
+      "file": "stingers/stinger_boss.ogg",
+      "duration_seconds": 5.9,
+      "events": [
+        "boss_appears"
+      ],
+      "priority": 100,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": false
+    },
+    {
+      "id": "stinger_victory",
+      "name": "战斗胜利",
+      "type": "stinger",
+      "file": "stingers/stinger_victory.ogg",
+      "duration_seconds": 4.05,
+      "events": [
+        "battle_victory"
+      ],
+      "priority": 90,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": true
+    },
+    {
+      "id": "stinger_danger",
+      "name": "危险逼近",
+      "type": "stinger",
+      "file": "stingers/stinger_danger.ogg",
+      "duration_seconds": 4.2,
+      "events": [
+        "sudden_danger"
+      ],
+      "priority": 90,
+      "duck_bgm_db": -12,
+      "resume_previous_bgm": false
+    }
+  ]
+}

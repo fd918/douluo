@@ -15,16 +15,26 @@ import {
   PersonIcon,
   ReaderIcon,
   ReloadIcon,
+  SpeakerLoudIcon,
+  SpeakerOffIcon,
   SunIcon,
 } from "@radix-ui/react-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, KeyboardInput, KeyboardTextarea, MobileScroll, useKeyboard } from "./mobile";
+import {
+  generateAiAction,
+  generateAiDialogue,
+  generateAiSummary,
+  type AiActionResult,
+  type AiDialogueResult,
+} from "./ai";
 import {
   getDefaultCustomChoice,
   getStoryNode,
   resolveStoryChoice,
   type StoryHistoryEntry,
 } from "./story";
+import { useDynamicGameMusic } from "./audio/useDynamicGameMusic";
 
 type TabId = "story" | "world" | "relations" | "bag" | "archive";
 type Stage = "welcome" | "creation" | "game";
@@ -161,6 +171,8 @@ type GameState = {
   lastStoryChange: string;
   storyNarrative: string;
   storyNote: string;
+  storySummary: string;
+  storySummaryThroughTurn: number;
 };
 
 type TimelineNode = {
@@ -216,6 +228,9 @@ type CombatState = {
 
 const SAVE_KEY = "douluo-life-simulator-save-v2";
 const LEGACY_SAVE_KEY = "douluo-life-simulator-save-v1";
+const STORY_SUMMARY_INTERVAL = 12;
+const STORY_SUMMARY_EVENT_LIMIT = 16;
+const DIALOGUE_MESSAGE_LIMIT = 20;
 
 const initialRelationships: Record<CharacterId, number> = {
   "xiao-wu": 35,
@@ -230,6 +245,15 @@ const initialDialogueHistory: Record<CharacterId, DialogueMessage[]> = {
   oscar: [],
   "ning-rongrong": [],
 };
+
+function trimDialogueHistory(value: Partial<Record<CharacterId, DialogueMessage[]>> | null | undefined) {
+  const result = { ...initialDialogueHistory };
+  for (const characterId of Object.keys(initialDialogueHistory) as CharacterId[]) {
+    const messages = value?.[characterId];
+    result[characterId] = Array.isArray(messages) ? messages.slice(-DIALOGUE_MESSAGE_LIMIT) : [];
+  }
+  return result;
+}
 
 const ITEMS: Record<string, ItemDefinition> = {
   academy_letter: {
@@ -360,6 +384,8 @@ const initialGame: GameState = {
   storyNarrative:
     "你走在诺丁城的街道上，铁匠铺的敲击声隔着两条巷子传来。雨刚停，前方青石路上留着一串泛着蓝光的新鲜脚印，方向正是学院后门。",
   storyNote: "脚印边缘残留着植物系魂力，这不是普通行人留下的痕迹。",
+  storySummary: "",
+  storySummaryThroughTurn: 0,
 };
 
 const locations: WorldLocation[] = [
@@ -694,7 +720,7 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     inventory: { ...initialGame.inventory, ...(value?.inventory ?? {}) },
     equipment: { ...initialGame.equipment, ...(value?.equipment ?? {}) },
     relationships: { ...initialRelationships, ...(value?.relationships ?? {}) },
-    dialogueHistory: { ...initialDialogueHistory, ...(value?.dialogueHistory ?? {}) },
+    dialogueHistory: trimDialogueHistory(value?.dialogueHistory),
     npcMemories: Array.isArray(value?.npcMemories) ? value.npcMemories : [],
     npcActionLog: Array.isArray(value?.npcActionLog) ? value.npcActionLog : [],
     pendingNpcAction: value?.pendingNpcAction && npcActionTemplates.some((action) => action.id === value.pendingNpcAction)
@@ -708,6 +734,8 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     currentStoryNodeId: hasStructuredStory ? (value?.currentStoryNodeId ?? initialGame.currentStoryNodeId) : initialGame.currentStoryNodeId,
     storyNarrative: hasStructuredStory ? (value?.storyNarrative ?? initialGame.storyNarrative) : initialGame.storyNarrative,
     storyNote: hasStructuredStory ? (value?.storyNote ?? initialGame.storyNote) : initialGame.storyNote,
+    storySummary: typeof value?.storySummary === "string" ? value.storySummary.slice(0, 600) : "",
+    storySummaryThroughTurn: Math.max(0, Math.min(value?.turns ?? 0, value?.storySummaryThroughTurn ?? 0)),
   };
   const maxHp = getStats(merged).maxHp;
   return { ...merged, currentHp: Math.max(1, Math.min(merged.currentHp || maxHp, maxHp)) };
@@ -898,6 +926,17 @@ function getTravelStoryNode(locationId: LocationId) {
   return "notting_street";
 }
 
+function createLocalStorySummary(previousSummary: string, events: TimelineNode[]) {
+  const recent = events
+    .map((event) => `第${event.turn}轮「${event.title}」：${event.summary}`)
+    .join("；");
+  const combined = [previousSummary ? `此前：${previousSummary}` : "", recent ? `本阶段：${recent}` : ""]
+    .filter(Boolean)
+    .join("。 ");
+  if (combined.length <= 600) return combined;
+  return `${combined.slice(0, 280)}……${combined.slice(-300)}`;
+}
+
 export default function Prototype() {
   const keyboard = useKeyboard();
   const savedSession = useMemo(loadSavedSession, []);
@@ -917,6 +956,8 @@ export default function Prototype() {
   const [selectedLocationId, setSelectedLocationId] = useState<LocationId | null>(null);
   const [travelingTo, setTravelingTo] = useState<LocationId | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<CharacterId | null>(null);
+  const [dialogueSending, setDialogueSending] = useState<CharacterId | null>(null);
+  const summaryAttemptKeyRef = useRef("");
   const game = session.game;
   const stats = useMemo(() => getStats(game), [game]);
   const selectedLocation = selectedLocationId
@@ -925,6 +966,14 @@ export default function Prototype() {
   const selectedCharacter = selectedCharacterId
     ? characters.find((character) => character.id === selectedCharacterId) ?? null
     : null;
+  const currentStoryNode = getStoryNode(game);
+  const music = useDynamicGameMusic({
+    stage,
+    activeTab,
+    location: game.location,
+    chapter: currentStoryNode.chapter,
+    inCombat: combat?.status === "active",
+  });
 
   useEffect(() => {
     if (stage !== "game") return;
@@ -937,6 +986,63 @@ export default function Prototype() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (stage !== "game" || thinking || dialogueSending) return;
+    const summarizedThrough = game.storySummaryThroughTurn;
+    if (game.turns - summarizedThrough < STORY_SUMMARY_INTERVAL) return;
+
+    const targetTurn = game.turns;
+    const targetNodeId = session.currentNodeId;
+    const attemptKey = `${targetNodeId}:${targetTurn}:${summarizedThrough}`;
+    if (summaryAttemptKeyRef.current === attemptKey) return;
+    summaryAttemptKeyRef.current = attemptKey;
+
+    const events = session.nodes
+      .filter((node) => node.turn > summarizedThrough && node.turn <= targetTurn)
+      .slice(-STORY_SUMMARY_EVENT_LIMIT);
+    if (events.length === 0) return;
+
+    const node = getStoryNode(game);
+    const fallbackSummary = createLocalStorySummary(game.storySummary, events);
+    void (async () => {
+      let summary = fallbackSummary;
+      try {
+        const result = await generateAiSummary({
+          previousSummary: game.storySummary,
+          events: events.map((event) => ({ turn: event.turn, title: event.title, summary: event.summary })),
+          current: {
+            location: game.location,
+            chapter: node.chapter,
+            quest: node.quest,
+            flags: game.storyFlags,
+          },
+        });
+        summary = result.summary;
+      } catch {
+        summary = fallbackSummary;
+      }
+
+      setSession((current) => {
+        if (current.currentNodeId !== targetNodeId || current.game.storySummaryThroughTurn >= targetTurn) {
+          return current;
+        }
+        const updatedGame = hydrateGame({
+          ...current.game,
+          storySummary: summary,
+          storySummaryThroughTurn: targetTurn,
+        });
+        return {
+          ...current,
+          game: updatedGame,
+          nodes: current.nodes.map((timelineNode) => (
+            timelineNode.id === current.currentNodeId ? { ...timelineNode, snapshot: updatedGame } : timelineNode
+          )),
+          savedAt: new Date().toISOString(),
+        };
+      });
+    })();
+  }, [dialogueSending, game.storySummary, game.storySummaryThroughTurn, game.turns, session.currentNodeId, stage, thinking]);
+
   const commitGame = (transform: (current: GameState) => GameState, event: TimelineEvent) => {
     setSession((current) => appendTimelineNode(current, hydrateGame(transform(current.game)), event));
   };
@@ -946,6 +1052,7 @@ export default function Prototype() {
     const nextGame = { ...base, currentHp: getStats(base).maxHp };
     keyboard.hide();
     setSession(createSession(nextGame));
+    music.playEvent("martial_soul_awakened");
     window.setTimeout(() => {
       resetPhoneViewport();
       setStage("game");
@@ -986,38 +1093,67 @@ export default function Prototype() {
     }, 720);
   };
 
-  const submitCustomAction = () => {
+  const submitCustomAction = async () => {
     const action = customAction.trim();
-    if (!action) return;
+    if (!action || thinking) return;
+    const node = getStoryNode(game);
+    const defaultChoice = getDefaultCustomChoice(game);
+    if (!defaultChoice) {
+      setToast("当前结局已经完成，请开启新的时间线");
+      return;
+    }
+    const resolution = resolveStoryChoice(game, defaultChoice.id, action);
+    if (!resolution) return;
+
     keyboard.hide();
-    window.setTimeout(() => {
-      setCustomOpen(false);
-      setThinking(true);
-      resetPhoneViewport();
-    }, 420);
-    window.setTimeout(() => {
-      const defaultChoice = getDefaultCustomChoice(game);
-      if (!defaultChoice) {
-        setThinking(false);
-        return;
-      }
-      const resolution = resolveStoryChoice(game, defaultChoice.id, action);
-      if (!resolution) {
-        setThinking(false);
-        return;
-      }
+    setCustomOpen(false);
+    setCustomAction("");
+    setThinking(true);
+    window.setTimeout(resetPhoneViewport, 320);
+
+    let aiResult: AiActionResult | null = null;
+    try {
+      aiResult = await generateAiAction({
+        action,
+        player: {
+          name: game.name,
+          identity: game.identity,
+          talent: game.talent,
+          soulPower: game.soulPower,
+        },
+        scene: {
+          chapter: node.chapter,
+          title: node.title,
+          location: node.location,
+          narrative: game.storyNarrative,
+          localOutcome: resolution.narrative,
+        },
+        storySummary: game.storySummary,
+        flags: game.storyFlags,
+        memories: game.npcMemories.map((memory) => `${getCharacter(memory.characterId).name}：${memory.detail}`),
+      });
+    } catch {
+      aiResult = null;
+    }
+
+    try {
       commitGame(
         (current) => {
           const advanced = applyStoryChoice(current, defaultChoice.id, action);
           const witnessId = chooseMemoryWitness(action, advanced.relationships);
           const next: GameState = {
             ...advanced,
+            narrative: aiResult?.narrative ?? advanced.narrative,
+            note: aiResult?.note ?? advanced.note,
+            storyNarrative: aiResult?.narrative ?? advanced.storyNarrative,
+            storyNote: aiResult?.note ?? advanced.storyNote,
+            lastStoryChange: aiResult ? `AI 动态剧情 · ${advanced.lastStoryChange}` : advanced.lastStoryChange,
             npcMemories: addNpcMemory(advanced.npcMemories, {
               characterId: witnessId,
               turn: advanced.turns,
               source: "行动",
               title: "你选择了自己的道路",
-              detail: `${getCharacter(witnessId).name}记住了你的决定：“${action}”。`,
+              detail: aiResult?.memory ?? `${getCharacter(witnessId).name}记住了你的决定：“${action}”。`,
               important: true,
             }),
             recentRelationChange: null,
@@ -1026,10 +1162,10 @@ export default function Prototype() {
         },
         { title: `${getStoryNode(game).title} · 自由行动`, summary: action },
       );
-      setCustomAction("");
+      setToast(aiResult ? "AI 已生成新的剧情分支" : "AI 暂不可用，已用本地剧情推进");
+    } finally {
       setThinking(false);
-      setToast("自由行动已推进到下一剧情节点");
-    }, 1200);
+    }
   };
 
   const restartStory = () => {
@@ -1039,6 +1175,8 @@ export default function Prototype() {
         currentStoryNodeId: "notting_street",
         storyFlags: [],
         storyHistory: [],
+        storySummary: "",
+        storySummaryThroughTurn: current.turns,
         storyCycle: current.storyCycle + 1,
         lastStoryChange: `第 ${current.storyCycle + 1} 条时间线已经开启`,
         location: "诺丁城",
@@ -1064,6 +1202,7 @@ export default function Prototype() {
       { title: "冥想修炼", summary: "运转魂力一个周天，恢复状态并积累 120 点魂力经验。" },
     );
     setToast(willLevel ? "修炼突破，魂力等级提升" : "修炼完成，魂力经验 +120");
+    if (willLevel) music.playEvent("level_breakthrough");
   };
 
   const openLocation = (locationId: LocationId) => {
@@ -1115,54 +1254,94 @@ export default function Prototype() {
     setSelectedCharacterId(characterId);
   };
 
-  const sendCharacterMessage = (character: CharacterProfile, rawMessage: string) => {
+  const sendCharacterMessage = async (character: CharacterProfile, rawMessage: string) => {
     const message = rawMessage.trim();
-    if (!message) return;
+    if (!message || dialogueSending) return;
 
     keyboard.hide();
     const dialogue = character.dialogues.find(
       (item) => item.prompt === message || item.keywords.some((keyword) => message.includes(keyword)),
     );
-    const response = dialogue?.response ?? character.defaultResponse;
-    const affection = dialogue?.affection ?? 1;
+    const localResponse = dialogue?.response ?? character.defaultResponse;
+    const localAffection = dialogue?.affection ?? 1;
     const rememberedMessage = message.length > 96 ? `${message.slice(0, 94)}……` : message;
+    setDialogueSending(character.id);
 
-    commitGame(
-      (current) => {
-        const history = current.dialogueHistory[character.id] ?? [];
-        const turn = current.turns + 1;
-        const next: GameState = {
-          ...current,
-          turns: turn,
-          relationship: character.id === "xiao-wu" ? Math.min(100, current.relationship + affection) : current.relationship,
-          relationships: {
-            ...current.relationships,
-            [character.id]: Math.min(100, (current.relationships[character.id] ?? initialRelationships[character.id]) + affection),
-          },
-          dialogueHistory: {
-            ...current.dialogueHistory,
-            [character.id]: [
+    let aiResult: AiDialogueResult | null = null;
+    try {
+      aiResult = await generateAiDialogue({
+        message,
+        player: {
+          name: game.name,
+          identity: game.identity,
+          soulPower: game.soulPower,
+          location: game.location,
+        },
+        character: {
+          name: character.name,
+          title: character.title,
+          martialSoul: character.martialSoul,
+          profile: character.profile,
+          affection: game.relationships[character.id] ?? initialRelationships[character.id],
+        },
+        storySummary: game.storySummary,
+        history: game.dialogueHistory[character.id] ?? [],
+        memories: game.npcMemories
+          .filter((memory) => memory.characterId === character.id)
+          .map((memory) => memory.detail),
+      });
+    } catch {
+      aiResult = null;
+    }
+
+    const response = aiResult?.reply ?? localResponse;
+    const affection = aiResult?.affectionDelta ?? localAffection;
+
+    try {
+      commitGame(
+        (current) => {
+          const history = current.dialogueHistory[character.id] ?? [];
+          const turn = current.turns + 1;
+          const oldAffection = current.relationships[character.id] ?? initialRelationships[character.id];
+          const nextAffection = Math.max(0, Math.min(100, oldAffection + affection));
+          const next: GameState = {
+            ...current,
+            turns: turn,
+            relationship: character.id === "xiao-wu"
+              ? Math.max(0, Math.min(100, current.relationship + affection))
+              : current.relationship,
+            relationships: {
+              ...current.relationships,
+              [character.id]: nextAffection,
+            },
+            dialogueHistory: {
+              ...current.dialogueHistory,
+              [character.id]: [
               ...history,
               { role: "player", text: message } as DialogueMessage,
               { role: "character", text: response } as DialogueMessage,
-            ].slice(-12),
-          },
-          npcMemories: addNpcMemory(current.npcMemories, {
-            characterId: character.id,
-            turn,
-            source: "对话",
-            title: dialogue?.prompt ?? `谈到“${rememberedMessage.slice(0, 16)}”`,
-            detail: `你说：“${rememberedMessage}” ${character.name}回应后，把这件事记了下来。`,
-            important: affection >= 2 || /答应|约定|喜欢|秘密|以后/.test(message),
-          }),
-          recentRelationChange: { characterId: character.id, delta: affection },
-          note: `你与${character.name}谈到了“${message}”。这段对话已经记录在人物关系中。`,
-        };
-        return { ...next, pendingNpcAction: selectNpcAction(next) };
-      },
-      { title: `与${character.name}交谈`, summary: message },
-    );
-    setToast(`${character.name}好感 +${affection}`);
+              ].slice(-DIALOGUE_MESSAGE_LIMIT),
+            },
+            npcMemories: addNpcMemory(current.npcMemories, {
+              characterId: character.id,
+              turn,
+              source: "对话",
+              title: dialogue?.prompt ?? `谈到“${rememberedMessage.slice(0, 16)}”`,
+              detail: aiResult?.memory ?? `你说：“${rememberedMessage}” ${character.name}回应后，把这件事记了下来。`,
+              important: affection >= 2 || /答应|约定|喜欢|秘密|以后/.test(message),
+            }),
+            recentRelationChange: { characterId: character.id, delta: affection },
+            note: `你与${character.name}谈到了“${rememberedMessage}”。这段对话已经记录在人物关系中。`,
+          };
+          return { ...next, pendingNpcAction: selectNpcAction(next) };
+        },
+        { title: `与${character.name}交谈`, summary: message },
+      );
+      const affectionText = affection > 0 ? `+${affection}` : `${affection}`;
+      setToast(aiResult ? `${character.name}已回应，好感 ${affectionText}` : "AI 暂不可用，已使用本地角色回应");
+    } finally {
+      setDialogueSending(null);
+    }
   };
 
   const respondToNpcAction = (responseIndex: number) => {
@@ -1223,6 +1402,7 @@ export default function Prototype() {
       status: "active",
       log: [`${enemy.name}挡住了去路。你的${game.martialSoul}已经展开。`],
     });
+    music.playEvent("boss_appears");
   };
 
   const performCombatAction = (action: "basic" | "skill") => {
@@ -1265,6 +1445,7 @@ export default function Prototype() {
         { title: `战胜${enemy.name}`, summary: `获得 ${enemy.expReward} 经验、${enemy.coinReward} 金魂币和${ITEMS[enemy.lootId].name}。` },
       );
       setToast(willLevel ? "战斗突破，魂力等级提升" : "战利品已放入行囊");
+      music.playEvent(willLevel ? "level_breakthrough" : "battle_victory");
       return;
     }
 
@@ -1464,6 +1645,9 @@ export default function Prototype() {
             {activeTab === "archive" ? (
               <ArchiveScreen
                 session={session}
+                musicMuted={music.muted}
+                musicReady={music.ready}
+                onToggleMusic={music.toggleMuted}
                 onSave={saveNow}
                 onRewind={rewindTo}
                 onReset={resetGame}
@@ -1561,6 +1745,7 @@ export default function Prototype() {
             score={game.relationships[selectedCharacter.id] ?? initialRelationships[selectedCharacter.id]}
             history={game.dialogueHistory[selectedCharacter.id] ?? []}
             memories={game.npcMemories.filter((memory) => memory.characterId === selectedCharacter.id)}
+            sending={dialogueSending === selectedCharacter.id}
             onSend={(message) => sendCharacterMessage(selectedCharacter, message)}
           />
         ) : null}
@@ -1971,13 +2156,15 @@ function CharacterSheet({
   score,
   history,
   memories,
+  sending,
   onSend,
 }: {
   character: CharacterProfile;
   score: number;
   history: DialogueMessage[];
   memories: NpcMemory[];
-  onSend: (message: string) => void;
+  sending: boolean;
+  onSend: (message: string) => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
 
@@ -1987,8 +2174,8 @@ function CharacterSheet({
 
   const submitMessage = () => {
     const nextMessage = message.trim();
-    if (!nextMessage) return;
-    onSend(nextMessage);
+    if (!nextMessage || sending) return;
+    void onSend(nextMessage);
     setMessage("");
   };
 
@@ -2044,7 +2231,7 @@ function CharacterSheet({
 
         <div className="dialogue-suggestions" aria-label="推荐话题">
           {character.dialogues.map((dialogue) => (
-            <button key={dialogue.prompt} type="button" onClick={() => onSend(dialogue.prompt)}>
+            <button key={dialogue.prompt} type="button" onClick={() => void onSend(dialogue.prompt)} disabled={sending}>
               {dialogue.prompt}<ChevronRightIcon />
             </button>
           ))}
@@ -2061,13 +2248,16 @@ function CharacterSheet({
                 if (event.key === "Enter") submitMessage();
               }}
               placeholder={`和${character.name}说点什么……`}
+              disabled={sending}
             />
-            <button type="button" onClick={submitMessage} disabled={!message.trim()} aria-label={`发送给${character.name}`}>
+            <button type="button" onClick={submitMessage} disabled={!message.trim() || sending} aria-label={`发送给${character.name}`}>
               <PaperPlaneIcon />
             </button>
           </div>
         </div>
-        <p className="dialogue-engine-note">当前由本地角色剧情驱动；接入 AI 后可继续扩展长期记忆和开放对话。</p>
+        <p className="dialogue-engine-note">
+          {sending ? "角色正在结合共同记忆思考回应……" : "自由输入优先使用 AI；服务不可用时自动回退本地角色剧情。"}
+        </p>
       </section>
     </div>
   );
@@ -2240,7 +2430,15 @@ function CombatSheet({
   );
 }
 
-function ArchiveScreen({ session, onSave, onRewind, onReset }: { session: GameSession; onSave: () => void; onRewind: (nodeId: string) => void; onReset: () => void }) {
+function ArchiveScreen({ session, musicMuted, musicReady, onToggleMusic, onSave, onRewind, onReset }: {
+  session: GameSession;
+  musicMuted: boolean;
+  musicReady: boolean;
+  onToggleMusic: () => void;
+  onSave: () => void;
+  onRewind: (nodeId: string) => void;
+  onReset: () => void;
+}) {
   const game = session.game;
   const storyNode = getStoryNode(game);
   const timeline = [...session.nodes].sort((a, b) => b.sequence - a.sequence);
@@ -2253,6 +2451,21 @@ function ArchiveScreen({ session, onSave, onRewind, onReset }: { session: GameSe
         <div className="archive-stat-row"><span>{session.nodes.length} 个节点</span><span>{branchCount} 条分支</span><span>结局 {game.completedEndings.length}/4</span><span>回溯 {game.rewinds} 次</span></div>
         <button className="primary-button" type="button" onClick={onSave}><BookmarkIcon />保存完整档案</button>
       </article>
+
+      <button
+        className="audio-setting-button"
+        type="button"
+        onClick={onToggleMusic}
+        aria-pressed={!musicMuted}
+        disabled={!musicReady}
+      >
+        {musicMuted ? <SpeakerOffIcon /> : <SpeakerLoudIcon />}
+        <span>
+          <strong>动态背景音乐</strong>
+          <small>{musicReady ? (musicMuted ? "当前已关闭，点击开启" : "根据剧情与战斗自动切换") : "音乐资源正在准备"}</small>
+        </span>
+        <span>{musicMuted ? "开启" : "关闭"}</span>
+      </button>
 
       <div className="timeline-heading"><div><span className="section-kicker">完整历史</span><h2>选择回溯节点</h2></div><ReloadIcon /></div>
       <p className="timeline-help">回溯会消耗 1 次机会，并从所选节点建立新支线；原有历史不会被删除。</p>

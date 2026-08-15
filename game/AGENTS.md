@@ -3,10 +3,13 @@
 ## Project Decisions
 
 - Product name: 斗罗大陆人生模拟器.
+- `docs/DOULUO_WORLD_BIBLE.md` is the canonical world-setting source. Active game code, AI prompts, art, audio and release copy must not introduce 斗破苍穹 names, locations, power systems or motifs.
 - The user selected the third generated direction: dark navy, antique gold, cyan and violet soul-energy effects, and a dense premium mobile-game HUD.
 - Reuse the original assets in `public/game-assets/`; never replace character portraits, the Blue Silver Grass emblem, map, city background, or soul meter with placeholders.
 - Keep the five-tab navigation order: 剧情、世界、关系、行囊、档案.
-- The current version is a local demo engine. AI integration must use a server-side adapter and must never expose an API key in browser code.
+- The current version uses a hybrid story engine. AI integration must use the same-origin server adapter and must never expose an API key in browser code. A primary and optional fallback OpenAI-compatible provider are configured through server-side environment variables.
+- Preserve the save keys `douluo-life-simulator-save-v2` and `douluo-life-simulator-save-v1`; releases must migrate old saves rather than silently resetting them.
+- Original dynamic music belongs in `public/audio/douluo/`, uses `douluo.audio.settings.v1`, and follows `docs/AUDIO_INTEGRATION.md`. Do not reuse or rename archived 斗破 music.
 
 ## Prototype Instructions
 

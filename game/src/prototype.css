@@ -1067,6 +1067,31 @@ textarea:focus-visible {
   background: rgba(94, 34, 42, 0.18);
 }
 
+.audio-setting-button {
+  width: 100%;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(88, 216, 239, 0.3);
+  border-radius: 12px;
+  color: var(--cyan);
+  text-align: left;
+  background: rgba(12, 32, 49, 0.82);
+}
+
+.audio-setting-button > svg { width: 22px; height: 22px; justify-self: center; }
+.audio-setting-button strong,
+.audio-setting-button small { display: block; }
+.audio-setting-button strong { color: #e7d7ad; font-size: 12px; }
+.audio-setting-button small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.audio-setting-button > span:last-child { color: var(--gold); font-size: 11px; font-weight: 700; }
+.audio-setting-button:disabled { opacity: 0.45; }
+.audio-setting-button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
 .save-toast {
   position: absolute;
   top: 63px;
