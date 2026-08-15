@@ -64,6 +64,35 @@ button {
   padding: 24px;
 }
 
+.phone-stage-native,
+.phone-scale-box-native,
+.phone-device-native {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+}
+
+.phone-stage-native {
+  display: block;
+  padding: 0;
+  background: #06101e;
+}
+
+.device-screen-native {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: auto;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
 .device-menu-bar {
   position: absolute;
   z-index: 100;
@@ -234,6 +263,18 @@ button {
   cursor: default !important;
 }
 
+.device-screen[data-presentation="native"],
+.device-screen[data-presentation="native"] * {
+  cursor: auto !important;
+}
+
+.device-screen[data-presentation="native"] input,
+.device-screen[data-presentation="native"] textarea,
+.device-screen[data-presentation="native"] [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .device-screen *:focus,
 .device-screen *:focus-visible {
   outline: 0 !important;
@@ -250,6 +291,10 @@ button {
 .mobile-app-viewport {
   position: absolute;
   inset: 0;
+}
+
+.mobile-app-viewport[data-presentation="native"] {
+  bottom: 0 !important;
 }
 
 .mobile-app-viewport[data-platform="android"][data-keyboard-visible="false"] {
@@ -317,6 +362,10 @@ button {
 
 .mobile-app-viewport[data-platform="android"] .mobile-page {
   --mobile-safe-area-height: 0px;
+}
+
+.device-screen[data-presentation="native"] .mobile-page {
+  --mobile-safe-area-height: env(safe-area-inset-bottom, 0px);
 }
 
 .mobile-scroll {

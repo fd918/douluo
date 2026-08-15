@@ -61,7 +61,10 @@ function useDeviceScale(deviceWidth: number, deviceHeight: number) {
   return scale;
 }
 
-export function PhoneFrame({ children }: PropsWithChildren) {
+export function PhoneFrame({
+  children,
+  nativePresentation = false,
+}: PropsWithChildren<{ nativePresentation?: boolean }>) {
   const { device } = useMobileDevice();
   const { geometry } = device;
   const scale = useDeviceScale(geometry.device.width, geometry.device.height);
@@ -69,9 +72,36 @@ export function PhoneFrame({ children }: PropsWithChildren) {
   const contextValue = useMemo(() => ({ screenRef }), []);
   const mobileCursor = useMobileCursor();
 
+  if (nativePresentation) {
+    return (
+      <ScreenPortalContext.Provider value={contextValue}>
+        <div className="phone-stage phone-stage-native" data-presentation="native">
+          <div className="phone-scale-box phone-scale-box-native">
+            <div className="phone-device phone-device-native" data-presentation="native">
+              <div
+                ref={screenRef}
+                className="device-screen device-screen-native"
+                data-device={device.id}
+                data-phone-screen
+                data-presentation="native"
+                data-testid="device-screen"
+                onDragStartCapture={suppressNativeDrag}
+                style={{
+                  "--device-safe-area-bottom": "env(safe-area-inset-bottom, 0px)",
+                } as CSSProperties}
+              >
+                {children}
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScreenPortalContext.Provider>
+    );
+  }
+
   return (
     <ScreenPortalContext.Provider value={contextValue}>
-      <div className="phone-stage">
+      <div className="phone-stage" data-presentation="preview">
         <DevicePicker />
         <div
           className="phone-scale-box"
@@ -106,6 +136,7 @@ export function PhoneFrame({ children }: PropsWithChildren) {
               data-cursor-debug={mobileCursor.cursorDebug ? "true" : "false"}
               data-device={device.id}
               data-phone-screen
+              data-presentation="preview"
               data-testid="device-screen"
               {...mobileCursor.cursorHandlers}
               style={

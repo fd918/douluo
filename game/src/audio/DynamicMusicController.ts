@@ -8,9 +8,10 @@ import type {
   SetMusicStateOptions,
   StingerMusicCue,
 } from "./types";
+import { publicAssetUrl } from "../publicAsset";
 
-const DEFAULT_MANIFEST_URL = "/audio/douluo/music_manifest.json";
-const DEFAULT_ASSET_BASE_URL = "/audio/douluo/";
+const DEFAULT_MANIFEST_URL = publicAssetUrl("audio/douluo/music_manifest.json");
+const DEFAULT_ASSET_BASE_URL = publicAssetUrl("audio/douluo/");
 const DEFAULT_STORAGE_KEY = "douluo.audio.settings.v1";
 const DEFAULT_STATE_DEBOUNCE_MS = 3_000;
 const DEFAULT_SETTINGS: AudioSettings = {

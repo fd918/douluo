@@ -22,6 +22,31 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/tests/runtime-fixture.html");
 });
 
+test("a real phone opens the game full-screen without a second phone shell", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?native=1");
+
+  await expect(page).toHaveTitle("斗罗大陆人生模拟器");
+  await expect(page.getByTestId("device-picker")).toHaveCount(0);
+  await expect(page.getByTestId("phone-frame")).toHaveCount(0);
+  await expect(page.getByTestId("device-screen")).toHaveAttribute("data-presentation", "native");
+
+  const layout = await page.evaluate(() => {
+    const screen = document.querySelector<HTMLElement>('[data-testid="device-screen"]')!;
+    const rect = screen.getBoundingClientRect();
+    return {
+      width: rect.width,
+      height: rect.height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(layout.width).toBe(layout.viewportWidth);
+  expect(layout.height).toBe(layout.viewportHeight);
+  expect(layout.horizontalOverflow).toBeLessThanOrEqual(0);
+});
+
 test("horizontal intent stays in Carousel and cannot create parent momentum", async ({ page }) => {
   const carousel = page.locator(".fixture-carousel");
   const card = page.locator(".carousel-card").nth(1);
@@ -91,7 +116,7 @@ test("BottomSheet remains mounted while its default exit animation plays", async
   await page.locator(".sheet-trigger").click();
   await expect(page.getByTestId("bottom-sheet")).toBeVisible();
 
-  await page.getByTestId("sheet-overlay").click({ position: { x: 8, y: 8 } });
+  await page.getByTestId("sheet-overlay").click({ position: { x: 8, y: 8 }, force: true });
   await expect(page.getByTestId("bottom-sheet")).toHaveCount(1);
   await page.waitForTimeout(500);
   await expect(page.getByTestId("bottom-sheet")).toHaveCount(0);

@@ -61,6 +61,17 @@ export type StoryResolution = {
 
 const node = (value: StoryNode) => value;
 
+export const ALL_ENDINGS = [
+  "大陆守望者",
+  "怪物同盟",
+  "魂核君临者",
+  "自由行者",
+  "瀚海守望者",
+  "史莱克星辉",
+  "蓝银裁决者",
+  "潮汐远行者",
+] as const;
+
 export const storyNodes: Record<string, StoryNode> = {
   notting_street: node({
     id: "notting_street", chapter: "第一章 · 雨后异痕", title: "发光的脚印", location: "诺丁城", season: "三月·午后", quest: "查清雨后脚印的来源", choices: [
@@ -168,10 +179,117 @@ export const storyNodes: Record<string, StoryNode> = {
       { id: "leave", label: "带着线索离开权力中心", nextId: "ending_wanderer", outcome: "你拒绝成为任何势力的旗帜，把未解线索装进行囊，独自踏上更远的路。星斗森林深处仍有魂力回应你。", note: "结局已记录：自由行者。", effect: { experience: 220, addFlags: ["结局·自由行者"] } },
     ],
   }),
-  ending_guardian: node({ id: "ending_guardian", chapter: "结局", title: "大陆守望者", location: "新的时代", season: "多年以后", quest: "这条时间线已经完成", choices: [], endingName: "大陆守望者" }),
-  ending_alliance: node({ id: "ending_alliance", chapter: "结局", title: "怪物同盟", location: "史莱克学院", season: "多年以后", quest: "这条时间线已经完成", choices: [], endingName: "怪物同盟" }),
-  ending_power: node({ id: "ending_power", chapter: "结局", title: "魂核君临者", location: "大陆中心", season: "多年以后", quest: "这条时间线已经完成", choices: [], endingName: "魂核君临者" }),
-  ending_wanderer: node({ id: "ending_wanderer", chapter: "结局", title: "自由行者", location: "星斗大森林深处", season: "新的旅程", quest: "这条时间线已经完成", choices: [], endingName: "自由行者" }),
+  ending_guardian: node({
+    id: "ending_guardian", chapter: "第五章 · 大陆守望者", title: "阳光下的余波", location: "索托城", season: "盛夏", quest: "回应来自天斗城的新委托", endingName: "大陆守望者", choices: [
+      { id: "answer_call", label: "接受天斗城的秘密委托", nextId: "heaven_dou_letter", outcome: "实验组织虽然瓦解，残存的魂力装置却沿商路流入天斗城。你与伙伴收下新委托，第二卷旅程由此开始。", note: "新篇章已开启：天斗暗潮与瀚海航路。", effect: { experience: 160, relationship: 5, addFlags: ["第二卷·天斗来函", "守望者声望"] } },
+    ],
+  }),
+  ending_alliance: node({
+    id: "ending_alliance", chapter: "第五章 · 怪物同盟", title: "同一页上的名字", location: "史莱克学院", season: "盛夏", quest: "与伙伴共同调查天斗来函", endingName: "怪物同盟", choices: [
+      { id: "travel_together", label: "与伙伴一同前往天斗城", nextId: "heaven_dou_letter", outcome: "史莱克收到一封没有署名的急件：落日森林出现被人为催化的千年魂兽。你们决定以小队身份北上。", note: "团队将共同面对第二卷的全部试炼。", effect: { experience: 150, relationship: 8, addFlags: ["第二卷·天斗来函", "团队远征"] } },
+    ],
+  }),
+  ending_power: node({
+    id: "ending_power", chapter: "第五章 · 魂核君临者", title: "力量留下的回声", location: "大陆中心", season: "盛夏", quest: "追踪与人造魂核共鸣的远海晶石", endingName: "魂核君临者", choices: [
+      { id: "follow_resonance", label: "循魂核共鸣进入天斗暗市", nextId: "shadow_market", outcome: "人造魂核在午夜自行发亮，指向一块来自远海的深蓝晶石。你独自踏入天斗暗市，那里有人正等待持核者。", note: "力量路线已延伸至天斗暗市。", effect: { experience: 220, relationship: -2, addFlags: ["第二卷·魂核共鸣", "魂核随行", "力量倾向"] } },
+    ],
+  }),
+  ending_wanderer: node({
+    id: "ending_wanderer", chapter: "第五章 · 自由行者", title: "森林深处的呼唤", location: "星斗大森林深处", season: "长夏", quest: "回应蓝银草根系传来的古老讯息", endingName: "自由行者", choices: [
+      { id: "listen_to_forest", label: "追随蓝银根系的指引", nextId: "forest_oracle", outcome: "越过无人涉足的湿地后，你发现一株被黑色魂力侵蚀的蓝银古种。它的根系指向落日森林，也指向更遥远的西海。", note: "自由路线发现了第二卷最早的自然线索。", effect: { experience: 180, addFlags: ["第二卷·蓝银呼唤", "蓝银古种"] } },
+    ],
+  }),
+
+  forest_oracle: node({
+    id: "forest_oracle", chapter: "第六章 · 天斗暗潮", title: "蓝银古种的低语", location: "星斗大森林深处", season: "七月·晨雾", quest: "决定如何处理被侵蚀的蓝银古种", choices: [
+      { id: "purify_seed", label: "以自身魂力净化古种", nextId: "sunset_hunt", outcome: "你的蓝银草与古种根系连接，黑色魂力被一点点排出。古种回赠一枚落日森林的根系坐标。", note: "你获得自然魂兽的信任，并锁定千年鬼藤活动区域。", effect: { experience: 240, relationship: 4, addFlags: ["魂兽盟约", "落日根系坐标", "守护倾向"] } },
+      { id: "trace_corruption", label: "保留侵蚀力量反向追踪", nextId: "shadow_market", outcome: "你封存一缕黑色魂力，让它带路。气息最终停在天斗暗市的一间远海货栈前。", note: "侵蚀源头与天斗暗市的远海货物有关。", effect: { experience: 280, coins: 6, addFlags: ["远海黑市线索", "力量倾向"] } },
+      { id: "call_allies", label: "召集史莱克伙伴共同处理", nextId: "heaven_dou_letter", outcome: "伙伴们赶到后分工封锁根系、记录魂力与照顾附近魂兽。一封来自天斗城的急件也在此时送达。", note: "团队以完整证据回应了天斗城的求援。", effect: { experience: 210, relationship: 9, addFlags: ["团队远征", "团队羁绊", "蓝银古种"] } },
+    ],
+  }),
+  heaven_dou_letter: node({
+    id: "heaven_dou_letter", chapter: "第六章 · 天斗暗潮", title: "没有署名的皇家急件", location: "天斗城南驿", season: "七月·黄昏", quest: "查明落日森林魂兽异变与精英赛邀请的关系", image: "/game-assets/world-map.png", imageAlt: "通往天斗城与落日森林的大陆地图", choices: [
+      { id: "accept_warrant", label: "以调查员身份接受委托", nextId: "sunset_hunt", outcome: "你取得皇家通行证，可合法进入被封锁的落日森林。急件附页显示，已有三支魂师队在同一区域失踪。", note: "皇家通行证能避开巡逻，也会让你的行动受到关注。", effect: { experience: 170, coins: 8, addFlags: ["皇家通行证", "追查失踪魂师"] } },
+      { id: "investigate_market", label: "先查远海货栈与暗市", nextId: "shadow_market", outcome: "你绕开接待官，跟随货运印记进入地下暗市。那里正在拍卖能催化魂兽年限的深海魂晶。", note: "深海魂晶可能是落日森林异变的直接原因。", effect: { experience: 200, addFlags: ["远海黑市线索"] } },
+      { id: "seek_seven_treasure", label: "请宁荣荣核验邀请真伪", nextId: "tournament_qualifier", outcome: "宁荣荣发现急件使用了两套相互矛盾的皇家印章。你们决定将计就计，以精英赛参赛队身份进入核心区域。", note: "七宝担保让小队提前获得精英赛资格。", effect: { experience: 190, relationship: 7, addFlags: ["七宝担保", "团队远征", "识破伪造急件"] } },
+    ],
+  }),
+  shadow_market: node({
+    id: "shadow_market", chapter: "第六章 · 天斗暗潮", title: "地下暗市的蓝色拍品", location: "天斗城地下暗市", season: "七月·午夜", quest: "取得深海魂晶与货运名单", choices: [
+      { id: "expose_auction", label: "联合巡查队封锁拍卖场", nextId: "sunset_hunt", outcome: "你当众揭开魂晶用途，暗市买家四散逃离。货运名单显示下一批魂晶将送往落日森林。", note: "黑市账本成为指控幕后势力的新证据。", effect: { experience: 260, relationship: 5, addFlags: ["黑市账本", "守护倾向"] } },
+      { id: "buy_crystal", label: "买下魂晶研究其力量", nextId: "sunset_hunt", outcome: "你用高价买下深海魂晶。它与人造魂核产生危险共鸣，也在表面投出半幅航海星图。", note: "你保留了一块可强化魂力、也可能反噬的深海魂晶。", effect: { experience: 340, coins: -12, relationship: -3, addFlags: ["深海魂晶", "瀚海残图", "力量倾向"], rewardItemId: "sea_crystal" } },
+      { id: "steal_manifest", label: "伪装买家调包货运名单", nextId: "tournament_qualifier", outcome: "奥斯卡制造骚动，你用空卷轴换走货运名单。名单最后一栏写着“精英赛冠军船队”。", note: "精英赛冠军奖励与远海航路存在秘密关联。", effect: { experience: 300, relationship: 6, addFlags: ["瀚海残图", "货运名单", "团队羁绊"] } },
+    ],
+  }),
+  sunset_hunt: node({
+    id: "sunset_hunt", chapter: "第七章 · 千年魂环", title: "落日森林的三道魂迹", location: "落日森林", season: "八月·雷雨", quest: "选择适合自己的第二魂环道路", choices: [
+      { id: "ghost_vine", label: "挑战暴走的千年鬼藤", nextId: "second_ring_awakened", outcome: "鬼藤在深海魂晶影响下狂化。你以蓝银缠绕控制其核心，在它彻底失控前完成吸收。", note: "获得第二魂环：一千三百年鬼藤环，强化控制与破甲。", effect: { experience: 520, addFlags: ["魂环·千年鬼藤", "第二魂环已吸收"], rewardItemId: "millennium_essence" } },
+      { id: "moon_vine", label: "守护受伤的千年月藤", nextId: "second_ring_awakened", outcome: "你替月藤挡住追猎者。它主动分出一枚无损魂环，银白藤蔓在你的蓝银草上留下月纹。", note: "获得第二魂环：一千一百年月藤环，强化恢复与束缚。", effect: { experience: 440, relationship: 8, addFlags: ["魂环·千年月藤", "第二魂环已吸收", "魂兽盟约", "守护倾向"] } },
+      { id: "purify_vine", label: "净化被魂晶污染的青藤王", nextId: "second_ring_awakened", outcome: "你没有急着猎杀，而是先拔除青藤王体内的魂晶碎屑。它认可你的意志，留下深青色魂环。", note: "获得第二魂环：一千五百年青藤王环，强化范围控制。", effect: { experience: 500, relationship: 5, addFlags: ["魂环·千年青藤王", "第二魂环已吸收", "净化魂晶"] } },
+    ],
+  }),
+  second_ring_awakened: node({
+    id: "second_ring_awakened", chapter: "第七章 · 千年魂环", title: "第二魂技初鸣", location: "落日森林营地", season: "八月·黎明", quest: "稳定第二魂环并决定精英赛战术", choices: [
+      { id: "team_drill", label: "与伙伴进行团队魂技演练", nextId: "tournament_qualifier", outcome: "你的第二魂技第一次覆盖整片训练场。小舞负责诱敌，戴沐白破阵，辅助魂力在藤网中精准流转。", note: "团队掌握了以蓝银囚笼为核心的控制战术。", effect: { experience: 300, relationship: 9, addFlags: ["蓝银囚笼", "团队战术"], rewardItemId: "tournament_badge" } },
+      { id: "solo_mastery", label: "独自压缩魂环力量", nextId: "tournament_qualifier", outcome: "你把范围魂技压成一道锋利藤索，单体爆发大幅提升，但经脉也承受了更重压力。", note: "第二魂技获得力量分支，团队配合略有下降。", effect: { experience: 410, relationship: -3, addFlags: ["蓝银囚笼", "魂技·裁决藤", "力量倾向"] } },
+      { id: "healing_mastery", label: "研究魂环的生命共鸣", nextId: "tournament_qualifier", outcome: "你发现蓝银根系可以把恢复力量传给同伴。奥斯卡据此改良了补给，队伍续航显著提升。", note: "第二魂技获得守护分支，可在关键时刻保护全队。", effect: { experience: 350, relationship: 7, addFlags: ["蓝银囚笼", "魂技·生命藤网", "守护倾向"] } },
+    ],
+  }),
+  tournament_qualifier: node({
+    id: "tournament_qualifier", chapter: "第八章 · 精英赛风云", title: "天斗预选赛的暗号", location: "天斗大斗魂场", season: "九月·正午", quest: "在预选赛中追查伪装成参赛队的魂晶买家", choices: [
+      { id: "win_clean", label: "以团队战术堂堂正正取胜", nextId: "championship_night", outcome: "蓝银囚笼封锁全场，伙伴们依次完成破阵。你们赢得观众认可，也迫使暗中观察的买家改变交易计划。", note: "史莱克以完整阵容进入冠军夜。", effect: { experience: 480, relationship: 10, addFlags: ["精英赛连胜", "团队战术", "史莱克声望"] } },
+      { id: "follow_signal", label: "故意露出破绽追踪暗号", nextId: "championship_night", outcome: "你让对方误以为魂晶生效，随后跟踪场边暗号，找到藏在冠军奖杯底座里的半枚航海罗盘。", note: "瀚海航路的关键罗盘已被找到一半。", effect: { experience: 430, coins: 10, addFlags: ["半枚瀚海罗盘", "瀚海残图"] } },
+      { id: "overwhelm", label: "释放魂核力量碾压赛场", nextId: "championship_night", outcome: "人造魂核与第二魂环同时震动，对手瞬间失去反抗能力。胜利令人畏惧，也让幕后买家主动向你递来邀请。", note: "你以绝对力量进入冠军夜，并得到秘密交易席位。", effect: { experience: 620, relationship: -8, addFlags: ["魂核赛场", "力量倾向", "冠军交易席"] }, condition: (game) => game.storyFlags.includes("魂核随行") || game.storyFlags.includes("深海魂晶"), lockedText: "需要携带人造魂核或深海魂晶" },
+    ],
+  }),
+  championship_night: node({
+    id: "championship_night", chapter: "第八章 · 精英赛风云", title: "冠军夜与失控魂晶", location: "天斗大斗魂场", season: "九月·夜", quest: "阻止冠军庆典下方的魂晶共鸣阵", choices: [
+      { id: "save_crowd", label: "先疏散观众再封印魂阵", nextId: "vast_sea_map", outcome: "你用藤网搭起安全通道，伙伴们分散保护看台。共鸣阵最终被封，主谋却带走另一半罗盘。", note: "所有观众安全撤离，你获得公开支持。", effect: { experience: 420, relationship: 11, addFlags: ["万人获救", "守护倾向", "公开声望"] } },
+      { id: "take_compass", label: "抢先夺取完整瀚海罗盘", nextId: "vast_sea_map", outcome: "你穿过失控魂力直抵阵眼，在主谋撤离前夺下完整罗盘。赛场受损，却没人能再隐藏远海航路。", note: "完整瀚海罗盘到手，可定位海神岛外围航线。", effect: { experience: 560, coins: 15, addFlags: ["完整瀚海罗盘", "获得瀚海航图"] } },
+      { id: "share_power", label: "让伙伴共同承受魂阵压力", nextId: "vast_sea_map", outcome: "五道魂力同时落入阵眼。你们没有任何一人倒下，宁荣荣从破碎光纹中还原了完整航图。", note: "团队共同解开航图，羁绊达到新的阶段。", effect: { experience: 500, relationship: 12, addFlags: ["完整瀚海罗盘", "获得瀚海航图", "史莱克同心"] }, condition: (game) => game.storyFlags.includes("团队战术") || game.relationship >= 55, lockedText: "需要团队战术或伙伴好感达到 55" },
+    ],
+  }),
+  vast_sea_map: node({
+    id: "vast_sea_map", chapter: "第九章 · 瀚海航路", title: "罗盘指向西海", location: "天斗城观星塔", season: "十月·星夜", quest: "补全航图并选择远海同行者", image: "/game-assets/world-map.png", imageAlt: "从天斗城通往西海的航路地图", choices: [
+      { id: "decode_stars", label: "用观星记录补全航图", nextId: "sea_route", outcome: "罗盘与星轨重合，失落航线逐段显现。你在终点标记旁看见海神岛三个古老字样。", note: "安全航路已经解锁，海神岛可在世界地图前往。", effect: { experience: 360, addFlags: ["获得瀚海航图", "星轨航路"], rewardItemId: "vast_sea_chart" } },
+      { id: "rescue_navigator", label: "救出被追杀的远海领航员", nextId: "sea_route", outcome: "你在城外截住追兵，救下唯一走过这条航路的领航员。她愿以真实潮汐记录换取同行保护。", note: "领航员加入船队，暴风海域的风险降低。", effect: { experience: 420, relationship: 7, addFlags: ["获得瀚海航图", "远海领航员", "守护倾向"], rewardItemId: "vast_sea_chart" } },
+      { id: "seize_fleet", label: "接管暗市留下的魂导船", nextId: "sea_route", outcome: "你控制了装备魂晶炮的快船，并迫使原船员交出航海日志。强大的船队服从于你，却不真正信任你。", note: "获得高速魂导船与完整航线，力量路线继续加深。", effect: { experience: 520, coins: 20, relationship: -6, addFlags: ["获得瀚海航图", "魂导快船", "力量倾向"], rewardItemId: "vast_sea_chart" } },
+    ],
+  }),
+  sea_route: node({
+    id: "sea_route", chapter: "第九章 · 瀚海航路", title: "暴风海峡的选择", location: "西海暴风海峡", season: "十月·风暴", quest: "带领船队穿过魂兽与雷暴共存的海峡", choices: [
+      { id: "follow_tide", label: "相信领航员绕行潮眼", nextId: "sea_god_shore", outcome: "船队贴着潮眼边缘穿行，数次与巨浪擦肩而过。黎明时，海神岛的轮廓终于从雾中升起。", note: "船队完整抵达，补给与伙伴状态良好。", effect: { experience: 430, relationship: 8, addFlags: ["完整船队", "潮汐经验"] }, condition: (game) => game.storyFlags.includes("远海领航员") || game.storyFlags.includes("星轨航路"), lockedText: "需要领航员或星轨航路" },
+      { id: "protect_beast", label: "救助被魂晶困住的海魂兽", nextId: "sea_god_shore", outcome: "你潜入浪下切断魂晶锁链。获救海魂兽托起船尾，带领所有船只越过最危险的礁群。", note: "海魂兽承认你的善意，岛上守卫也看见了这一幕。", effect: { experience: 500, relationship: 7, addFlags: ["海魂兽盟约", "守护倾向", "完整船队"] } },
+      { id: "break_storm", label: "以魂核力量正面撕开风暴", nextId: "sea_god_shore", outcome: "蓝银藤网缠住桅杆，人造魂核化作贯穿乌云的光柱。船队以最快速度冲出风暴，也惊动了深海中的强大存在。", note: "你证明了力量，却让深海试炼提前苏醒。", effect: { experience: 650, relationship: -4, addFlags: ["撕裂风暴", "深海注视", "力量倾向"] }, condition: (game) => game.storyFlags.includes("魂核随行") || game.storyFlags.includes("魂导快船"), lockedText: "需要魂核力量或魂导快船" },
+    ],
+  }),
+  sea_god_shore: node({
+    id: "sea_god_shore", chapter: "第十章 · 海神岛", title: "潮汐石阶前的誓言", location: "海神岛", season: "十一月·初晴", quest: "选择接受海岛试炼的方式", choices: [
+      { id: "guardian_oath", label: "以守护船队为誓接受试炼", nextId: "tidal_trial", outcome: "潮汐石阶亮起温和蓝光，你的每一段守护经历都化为阶梯。岛上守卫允许整支队伍共同进入。", note: "守护试炼开启，伙伴可在危急时互相援助。", effect: { experience: 520, relationship: 10, addFlags: ["海岛试炼·守护", "海神岛认可"] } },
+      { id: "team_oath", label: "与伙伴共同立下同进退誓言", nextId: "tidal_trial", outcome: "五只手同时按在潮汐石上，光纹沿着彼此魂力连接。试炼不再考验一个人，而是考验整个团队。", note: "同心试炼开启，团队结局条件已经具备。", effect: { experience: 500, relationship: 14, addFlags: ["海岛试炼·同心", "史莱克同心", "海神岛认可"] }, condition: (game) => game.relationship >= 60, lockedText: "需要伙伴好感达到 60" },
+      { id: "power_oath", label: "以征服深海为誓接受试炼", nextId: "tidal_trial", outcome: "潮汐石骤然下沉，深海压力全部压向你一人。你没有退后，海面因此出现一条只属于强者的黑色阶梯。", note: "征服试炼开启，最终力量将伴随更高代价。", effect: { experience: 720, relationship: -8, addFlags: ["海岛试炼·征服", "力量倾向", "海神岛认可"] } },
+    ],
+  }),
+  tidal_trial: node({
+    id: "tidal_trial", chapter: "第十章 · 海神岛", title: "九重潮汐与深海幻境", location: "海神岛潮汐禁地", season: "十一月·月夜", quest: "在幻境中决定力量、伙伴与自由的顺序", choices: [
+      { id: "hold_line", label: "留在最后守住所有人的退路", nextId: "deep_sea_crossroads", outcome: "九重潮汐一次次冲垮藤网，你又一次次将它重新织起。伙伴全部通过时，你才踏上最后一级石阶。", note: "无人被留在幻境，守护道路达到极致。", effect: { experience: 680, relationship: 15, addFlags: ["九重潮汐通过", "无人掉队", "守护倾向"] } },
+      { id: "link_souls", label: "连接所有人的魂力共同破境", nextId: "deep_sea_crossroads", outcome: "蓝银根系把五种魂力织成一张网。幻境无法再逐个击破你们，整片潮海被共同意志照亮。", note: "团队以完整状态通过最终幻境。", effect: { experience: 650, relationship: 16, addFlags: ["九重潮汐通过", "史莱克同心", "团队传奇"] }, condition: (game) => game.storyFlags.includes("海岛试炼·同心") || game.storyFlags.includes("团队战术"), lockedText: "需要同心试炼或团队战术" },
+      { id: "take_source", label: "夺取幻境深处的潮汐本源", nextId: "deep_sea_crossroads", outcome: "你无视幻境中的退路，把潮汐本源收入魂核。深海在一瞬间安静，伙伴却被隔在越来越远的岸上。", note: "你掌控潮汐本源，力量道路已不可逆转。", effect: { experience: 900, relationship: -15, addFlags: ["掌控潮汐本源", "力量倾向"] } },
+      { id: "walk_away", label: "放弃神赐力量保留自由", nextId: "deep_sea_crossroads", outcome: "你在最后一级石阶前转身，不让任何试炼替自己定义未来。潮汐没有惩罚你，反而在脚下让出一条通往远方的路。", note: "你拒绝力量与称号，保留了继续远行的自由。", effect: { experience: 480, relationship: 5, addFlags: ["拒绝神赐", "自由之路"] } },
+    ],
+  }),
+  deep_sea_crossroads: node({
+    id: "deep_sea_crossroads", chapter: "终章 · 潮汐命运", title: "海天交界的最终选择", location: "海神岛最高海崖", season: "十二月·日出", quest: "为横跨大陆与远海的时间线写下最终结局", image: "/game-assets/world-map.png", imageAlt: "海神岛与斗罗大陆相连的最终航路", choices: [
+      { id: "sea_guardian", label: "建立守护大陆与海疆的巡航同盟", nextId: "ending_sea_guardian", outcome: "你把航图、魂晶净化方法与海魂兽盟约公开给可信之人。多年后，每艘平安归来的船都记得最初守望者的名字。", note: "结局已记录：瀚海守望者。", effect: { experience: 900, relationship: 12, addFlags: ["结局·瀚海守望者"] }, condition: (game) => game.storyFlags.includes("守护倾向") && (game.storyFlags.includes("海魂兽盟约") || game.storyFlags.includes("无人掉队")), lockedText: "需要守护道路及海魂兽盟约或无人掉队" },
+      { id: "shrek_legend", label: "与伙伴把远征写进史莱克传承", nextId: "ending_shrek_starlight", outcome: "你们把每场失败、争执与胜利留给后来者。史莱克不再只是一所学院，而成为彼此照亮的星图。", note: "结局已记录：史莱克星辉。", effect: { experience: 850, relationship: 18, addFlags: ["结局·史莱克星辉"] }, condition: (game) => game.storyFlags.includes("史莱克同心") && game.relationship >= 70, lockedText: "需要史莱克同心且伙伴好感达到 70" },
+      { id: "blue_silver_judge", label: "融合魂核与潮汐本源裁定新秩序", nextId: "ending_blue_silver_judge", outcome: "蓝银根系越过陆地与海床，所有危险魂晶都在你的意志下熄灭。和平因此到来，也再无人能够制衡你的裁决。", note: "结局已记录：蓝银裁决者。", effect: { experience: 1200, addFlags: ["结局·蓝银裁决者"] }, condition: (game) => game.storyFlags.includes("掌控潮汐本源") && game.storyFlags.includes("力量倾向"), lockedText: "需要掌控潮汐本源并坚持力量道路" },
+      { id: "tide_wanderer", label: "把罗盘交给后来者，继续驶向未知", nextId: "ending_tide_wanderer", outcome: "你没有留下王座或称号，只把安全航图交给下一批远行者。新大陆的晨光在船首出现，而你的故事仍未结束。", note: "结局已记录：潮汐远行者。", effect: { experience: 720, relationship: 6, addFlags: ["结局·潮汐远行者"] } },
+    ],
+  }),
+  ending_sea_guardian: node({ id: "ending_sea_guardian", chapter: "最终结局", title: "瀚海守望者", location: "大陆与海疆", season: "许多年后", quest: "这条史诗时间线已经完成", choices: [], endingName: "瀚海守望者" }),
+  ending_shrek_starlight: node({ id: "ending_shrek_starlight", chapter: "最终结局", title: "史莱克星辉", location: "史莱克学院", season: "许多年后", quest: "这条史诗时间线已经完成", choices: [], endingName: "史莱克星辉" }),
+  ending_blue_silver_judge: node({ id: "ending_blue_silver_judge", chapter: "最终结局", title: "蓝银裁决者", location: "海天王座", season: "新纪元", quest: "这条史诗时间线已经完成", choices: [], endingName: "蓝银裁决者" }),
+  ending_tide_wanderer: node({ id: "ending_tide_wanderer", chapter: "最终结局", title: "潮汐远行者", location: "未知海域", season: "下一次日出", quest: "这条史诗时间线已经完成", choices: [], endingName: "潮汐远行者" }),
 };
 
 export function getStoryNode(game: StoryState) {

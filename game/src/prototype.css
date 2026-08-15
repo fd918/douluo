@@ -47,9 +47,18 @@ button {
   padding: 58px 15px calc(var(--mobile-safe-area-height) + 104px);
 }
 
+.device-screen[data-presentation="native"] .game-content {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+}
+
 .welcome-screen,
 .creation-screen {
   padding: 76px 24px calc(var(--mobile-safe-area-height) + 44px);
+}
+
+.device-screen[data-presentation="native"] .welcome-screen,
+.device-screen[data-presentation="native"] .creation-screen {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 28px);
 }
 
 .welcome-screen {
@@ -58,7 +67,10 @@ button {
   flex-direction: column;
   justify-content: center;
   text-align: center;
-  background: var(--ink) url("/game-assets/notting-city.png") center / cover no-repeat;
+  background-color: var(--ink);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .welcome-screen::before {
@@ -1224,6 +1236,7 @@ textarea:focus-visible {
 }
 
 .soul-skill-card { grid-template-columns: 42px 1fr; margin-top: 9px; border-color: rgba(88, 216, 239, 0.34); }
+.soul-ring-group + .soul-ring-group { margin-top: 13px; }
 
 .ring-orb {
   width: 52px;
@@ -1233,6 +1246,10 @@ textarea:focus-visible {
   border: 5px double #bf7cff;
   border-radius: 50%;
   box-shadow: 0 0 18px rgba(169, 133, 255, 0.44), inset 0 0 16px rgba(88, 216, 239, 0.18);
+}
+.ring-orb.millennium {
+  border-color: #7f4bff;
+  box-shadow: 0 0 22px rgba(127, 75, 255, 0.65), inset 0 0 16px rgba(88, 216, 239, 0.24);
 }
 
 .soul-skill-card > span {
@@ -1404,7 +1421,8 @@ textarea:focus-visible {
   background: #183d52;
 }
 
-.combat-actions button:last-child { border-color: #6f5b9a; background: #38315c; }
+.combat-actions button:nth-child(2) { border-color: #6f5b9a; background: #38315c; }
+.combat-actions button.second-soul-skill { border-color: #8b66c9; background: linear-gradient(135deg, #4b3272, #263d63); }
 .combat-actions button:disabled { opacity: 0.42; }
 .combat-actions span,
 .combat-actions small { display: block; }
@@ -1430,6 +1448,17 @@ textarea:focus-visible {
 
 .archive-stat-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -3px 0 14px; }
 .archive-stat-row span { padding: 5px 8px; border-radius: 7px; color: #b9c8d6; background: #13263a; font-size: 9px; }
+.achievement-heading { display: flex; align-items: end; justify-content: space-between; margin-top: 22px; color: var(--gold); }
+.achievement-heading .section-kicker { margin: 0; }
+.achievement-heading h2 { margin: 3px 0 0; color: #f3dfb0; font-family: "Noto Serif SC", serif; font-size: 19px; }
+.achievement-heading > strong { font-size: 12px; }
+.achievement-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.achievement-card { display: grid; grid-template-columns: 25px 1fr; gap: 7px; align-items: center; min-height: 60px; padding: 9px; border: 1px dashed rgba(147, 163, 183, 0.2); border-radius: 10px; color: #657387; background: #081322; }
+.achievement-card > span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: rgba(147, 163, 183, 0.08); }
+.achievement-card strong, .achievement-card small { display: block; }
+.achievement-card strong { font-size: 10px; }
+.achievement-card small { margin-top: 3px; font-size: 8px; line-height: 1.4; }
+.achievement-card.unlocked { border-style: solid; border-color: rgba(230, 189, 104, 0.38); color: #d9c382; background: linear-gradient(145deg, #111d2d, #0a1728); }
 .timeline-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; color: var(--gold); }
 .timeline-heading .section-kicker { margin: 0; }
 .timeline-heading h2 { margin: 3px 0 0; color: #f3dfb0; font-family: "Noto Serif SC", serif; font-size: 19px; }

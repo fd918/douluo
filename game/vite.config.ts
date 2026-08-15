@@ -4,9 +4,11 @@ import { aiDevApiPlugin } from "./server/vite-ai-plugin";
 
 export default defineConfig(({ mode }) => {
   const aiEnvironment = loadEnv(mode, ".", "AI_");
+  const githubPages = process.env.GITHUB_PAGES === "1";
   return {
+    base: githubPages ? "/douluo/" : "/",
     build: {
-      outDir: "dist/client",
+      outDir: githubPages ? "dist/pages" : "dist/client",
     },
     server: {
       host: "0.0.0.0",

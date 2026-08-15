@@ -27,6 +27,8 @@ const protectedFiles = [
   "src/mobile/components.tsx",
   "src/mobile/geometry.ts",
   "src/mobile/index.ts",
+  "src/mobile/useNativePresentation.ts",
+  "src/publicAsset.ts",
   "public/assets/iphone/Bezel.png",
   "public/assets/iphone/Keyboard.png",
   "public/assets/android/Pixel10.png",

@@ -10,6 +10,8 @@
 - The current version uses a hybrid story engine. AI integration must use the same-origin server adapter and must never expose an API key in browser code. A primary and optional fallback OpenAI-compatible provider are configured through server-side environment variables.
 - Preserve the save keys `douluo-life-simulator-save-v2` and `douluo-life-simulator-save-v1`; releases must migrate old saves rather than silently resetting them.
 - Original dynamic music belongs in `public/audio/douluo/`, uses `douluo.audio.settings.v1`, and follows `docs/AUDIO_INTEGRATION.md`. Do not reuse or rename archived 斗破 music.
+- Real phones use the native full-screen presentation with browser safe areas and the system keyboard. The iPhone / Pixel frame, picker, simulated status bar and keyboard are desktop-preview features only; `?preview=1` and `?native=1` are debug overrides.
+- The public short URL is hosted at `https://fd918.github.io/douluo/`. Static assets must use `publicAssetUrl`, GitHub Pages builds use the `/douluo/` base path, and AI remains on the Sites Worker with an explicit allowlisted CORS origin.
 
 ## Prototype Instructions
 
@@ -30,8 +32,8 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## Runtime Contract
 
-- Preserve the mobile device runtime unless the user's task explicitly asks otherwise. Do not replace it with a standalone page. Visual fidelity applies to app-owned content inside the device screen, not to template-owned device chrome.
-- Keep `App` composed around `PhoneFrame` -> `KeyboardProvider`, with `StatusBar`, app content, `HomeIndicator`, and `KeyboardDock` mounted inside the phone frame. `StatusBar` and the iOS home indicator are overlaid device chrome. When the Android keyboard is closed, the app viewport reserves the protected navigation-bar region instead of painting behind it. When the Android keyboard is open, preserve the current full-screen keyboard layout: its asset includes the IME navigation strip and the separate black navigation bar is hidden. iOS screens continue to paint behind the home-indicator area and own their safe-area content padding.
+- Keep the shared mobile runtime and its full-screen/preview presentation switch. Real mobile browsers render app content directly inside a native full-screen `device-screen`; desktop browsers render the calibrated device preview. Do not reintroduce a phone frame inside the real mobile experience.
+- Keep `App` composed around `PhoneFrame` -> `KeyboardProvider`. In desktop preview, keep `StatusBar`, app content, `HomeIndicator`, and `KeyboardDock` mounted inside the phone frame. In native presentation, omit simulated device chrome and use the browser's real safe areas and system keyboard.
 - Preserve the `iPhone` / `Pixel 10` device picker and both calibrated device presets. The Pixel screen is `427 x 952`; its `32 x 32` camera circle and `public/assets/android/navigation-bar.svg` bottom navigation bar are protected device chrome, not app content.
 - Preserve the device picker's intentionally lightweight Codex styling in the top-right corner: its trigger wrapper is borderless and transparent, its trigger sizes to content, and its right-aligned menu uses the compact 3px inset plus the specified hairline and elevation shadow layers. Keep the prototype root and default app screen white.
 - Preserve `StatusBar` as live device chrome, including its platform-specific typography, source status-icon assets, and spacing. Pixel 10 uses Roboto, Android indicators, and 32px top, left, and right padding. iPhone uses its iOS indicators, system typography, and calibrated spacing. Do not hardcode screenshot times like `9:41` into the status bar, replace its real-time clock, or move status bar content into app markup unless the user explicitly asks for a fixed/mock device time.

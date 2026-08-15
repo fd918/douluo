@@ -29,12 +29,14 @@ import {
   type AiDialogueResult,
 } from "./ai";
 import {
+  ALL_ENDINGS,
   getDefaultCustomChoice,
   getStoryNode,
   resolveStoryChoice,
   type StoryHistoryEntry,
 } from "./story";
 import { useDynamicGameMusic } from "./audio/useDynamicGameMusic";
+import { publicAssetUrl } from "./publicAsset";
 
 type TabId = "story" | "world" | "relations" | "bag" | "archive";
 type Stage = "welcome" | "creation" | "game";
@@ -42,6 +44,7 @@ type BagMode = "inventory" | "shop";
 type SoulAttribute = "植物" | "水" | "火" | "兽" | "无";
 type EquipmentSlot = "护具" | "饰品";
 type CombatStatus = "active" | "won" | "lost";
+type CombatAction = "basic" | "skill" | "secondSkill";
 type LocationId = "notting-city" | "shrek-academy" | "star-forest" | "sea-god-island";
 type CharacterId = "xiao-wu" | "dai-mubai" | "oscar" | "ning-rongrong";
 type DialogueMessage = { role: "player" | "character"; text: string };
@@ -226,6 +229,13 @@ type CombatState = {
   log: string[];
 };
 
+type AchievementDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  unlocked: (game: GameState) => boolean;
+};
+
 const SAVE_KEY = "douluo-life-simulator-save-v2";
 const LEGACY_SAVE_KEY = "douluo-life-simulator-save-v1";
 const STORY_SUMMARY_INTERVAL = 12;
@@ -318,6 +328,49 @@ const ITEMS: Record<string, ItemDefinition> = {
     slot: "护具",
     bonus: { maxHp: 22, defense: 4 },
   },
+  millennium_essence: {
+    id: "millennium_essence",
+    name: "千年魂力精华",
+    category: "消耗品",
+    description: "吸收第二魂环后凝结的纯净精华，使用后获得 500 点魂力经验。",
+    buyPrice: null,
+    sellPrice: 25,
+    effect: { kind: "experience", amount: 500 },
+  },
+  sea_crystal: {
+    id: "sea_crystal",
+    name: "深海魂晶",
+    category: "关键物品",
+    description: "来自远海的蓝色晶体，与人造魂核及瀚海罗盘存在共鸣。",
+    buyPrice: null,
+    sellPrice: null,
+  },
+  tournament_badge: {
+    id: "tournament_badge",
+    name: "精英赛资格徽章",
+    category: "关键物品",
+    description: "刻有天斗赛区纹章，可进入精英赛参赛者区域。",
+    buyPrice: null,
+    sellPrice: null,
+  },
+  vast_sea_chart: {
+    id: "vast_sea_chart",
+    name: "瀚海航图",
+    category: "关键物品",
+    description: "以罗盘、星轨与潮汐记录补全的航图，标注了海神岛外围安全航线。",
+    buyPrice: null,
+    sellPrice: null,
+  },
+  tide_armor: {
+    id: "tide_armor",
+    name: "潮汐轻甲",
+    category: "装备",
+    description: "以海魂兽自然脱落的鳞片制成，在风暴与控制魂技中保持稳定。",
+    buyPrice: null,
+    sellPrice: 60,
+    slot: "护具",
+    bonus: { maxHp: 48, defense: 8, speed: 5, control: 4 },
+  },
 };
 
 const INVENTORY_ORDER = [
@@ -328,6 +381,11 @@ const INVENTORY_ORDER = [
   "focus_incense",
   "apprentice_guard",
   "cloth_armor",
+  "millennium_essence",
+  "sea_crystal",
+  "tournament_badge",
+  "vast_sea_chart",
+  "tide_armor",
 ];
 
 const SHOP_ITEM_IDS = ["healing_herb", "focus_incense", "blank_notebook", "apprentice_guard", "cloth_armor"];
@@ -339,6 +397,33 @@ const FIRST_SOUL_RING: SoulRing = {
   attribute: "植物",
   skillName: "蓝银缠绕",
   skillDescription: "以蓝银草限制敌人行动，造成植物属性伤害，并有机会打断反击。",
+};
+
+const SECOND_SOUL_RINGS: Record<string, SoulRing> = {
+  "魂环·千年鬼藤": {
+    id: "ghost-vine-millennium",
+    name: "千年鬼藤环",
+    age: 1300,
+    attribute: "植物",
+    skillName: "蓝银囚笼",
+    skillDescription: "以多重藤蔓封锁范围，削弱防御并提高打断敌方行动的概率。",
+  },
+  "魂环·千年月藤": {
+    id: "moon-vine-millennium",
+    name: "千年月藤环",
+    age: 1100,
+    attribute: "植物",
+    skillName: "生命藤网",
+    skillDescription: "展开兼具束缚与生命共鸣的藤网，稳定自身并保护并肩作战的伙伴。",
+  },
+  "魂环·千年青藤王": {
+    id: "verdant-vine-king",
+    name: "千年青藤王环",
+    age: 1500,
+    attribute: "植物",
+    skillName: "青藤领域",
+    skillDescription: "让蓝银根系覆盖战场，在大范围内持续限制敌人的速度与行动。",
+  },
 };
 
 const initialGame: GameState = {
@@ -462,7 +547,7 @@ const characters: CharacterProfile[] = [
     title: "灵动敏攻系魂师",
     affiliation: "史莱克学院",
     martialSoul: "柔骨兔",
-    image: "/game-assets/xiao-wu.png",
+    image: publicAssetUrl("game-assets/xiao-wu.png"),
     tone: "pink",
     profile: "性格直率活泼，珍视真正的伙伴。看似无忧无虑，却对魂兽与星斗大森林的话题格外敏感。",
     story: "她邀请你在训练结束后去学院后山。林间有一串不属于普通野兽的足迹，她似乎知道那是什么，却没有立刻说破。",
@@ -480,7 +565,7 @@ const characters: CharacterProfile[] = [
     title: "强攻系战魂尊",
     affiliation: "史莱克学院",
     martialSoul: "邪眸白虎",
-    image: "/game-assets/dai-mubai.png",
+    image: publicAssetUrl("game-assets/dai-mubai.png"),
     tone: "blue",
     profile: "外表冷峻强势，战斗时果断直接。对认可的同伴很有担当，但很少主动提起自己的过去。",
     story: "训练场边缘留着一道被虎爪撕开的深痕。戴沐白愿意给你一次正面对练的机会，这也是他判断同伴的方式。",
@@ -498,7 +583,7 @@ const characters: CharacterProfile[] = [
     title: "食物系器魂师",
     affiliation: "史莱克学院",
     martialSoul: "香肠",
-    image: "/game-assets/oscar.png",
+    image: publicAssetUrl("game-assets/oscar.png"),
     tone: "green",
     profile: "看起来随性风趣，实际上观察细致。作为少见的先天满魂力食物系魂师，他比谁都清楚辅助同伴的责任。",
     story: "奥斯卡正在尝试改良恢复香肠的味道，需要有人陪他去集市辨认几种香料。一次普通采购，也可能遇见不普通的线索。",
@@ -516,7 +601,7 @@ const characters: CharacterProfile[] = [
     title: "七宝琉璃宗魂师",
     affiliation: "史莱克学院",
     martialSoul: "七宝琉璃塔",
-    image: "/game-assets/ning-rongrong.png",
+    image: publicAssetUrl("game-assets/ning-rongrong.png"),
     tone: "gold",
     profile: "出身上三宗，知识与眼界远超同龄人。骄傲之外，她正在学习如何成为可以交付后背的伙伴。",
     story: "她收到一封来自宗门的密信，却发现封口魂力被人触碰过。宁荣荣希望你陪她查清是谁在学院外窥探七宝琉璃宗。",
@@ -629,6 +714,59 @@ const ENEMIES: EnemyDefinition[] = [
     coinReward: 11,
     lootId: "healing_herb",
   },
+  {
+    id: "shadow-mantis",
+    name: "暗影螳螂",
+    title: "千年敏攻系魂兽",
+    attribute: "兽",
+    maxHp: 204,
+    attack: 43,
+    defense: 23,
+    speed: 38,
+    expReward: 620,
+    coinReward: 14,
+    lootId: "millennium_essence",
+  },
+  {
+    id: "storm-ray",
+    name: "风暴魔鳐",
+    title: "远海千年魂兽",
+    attribute: "水",
+    maxHp: 236,
+    attack: 46,
+    defense: 26,
+    speed: 35,
+    expReward: 760,
+    coinReward: 18,
+    lootId: "sea_crystal",
+  },
+  {
+    id: "magma-crab",
+    name: "熔岩钳蟹",
+    title: "海岛火系魂兽",
+    attribute: "火",
+    maxHp: 278,
+    attack: 51,
+    defense: 35,
+    speed: 21,
+    expReward: 880,
+    coinReward: 22,
+    lootId: "tide_armor",
+  },
+];
+
+const ACHIEVEMENTS: AchievementDefinition[] = [
+  { id: "first-choice", name: "命运起笔", description: "完成第一次剧情选择", unlocked: (game) => game.turns >= 1 },
+  { id: "first-win", name: "初战告捷", description: "赢得第一场魂师实战", unlocked: (game) => game.victories >= 1 },
+  { id: "veteran", name: "百战之心", description: "累计赢得 5 场实战", unlocked: (game) => game.victories >= 5 },
+  { id: "trusted", name: "真正的伙伴", description: "与任意角色的好感达到 60", unlocked: (game) => Object.values(game.relationships).some((score) => score >= 60) },
+  { id: "second-ring", name: "双环魂师", description: "获得第二魂环与第二魂技", unlocked: (game) => game.soulRings.length >= 2 },
+  { id: "first-ending", name: "命运观测者", description: "发现任意一个结局", unlocked: (game) => game.completedEndings.length >= 1 },
+  { id: "time-weaver", name: "时间织师", description: "开启第二条剧情时间线", unlocked: (game) => game.storyCycle >= 2 },
+  { id: "navigator", name: "瀚海领航员", description: "获得通往远海的瀚海航图", unlocked: (game) => game.storyFlags.includes("获得瀚海航图") },
+  { id: "island", name: "潮汐试炼者", description: "抵达海神岛并得到认可", unlocked: (game) => game.storyFlags.includes("海神岛认可") },
+  { id: "final-saga", name: "穿越大陆与远海", description: "完成第二卷最终结局", unlocked: (game) => game.completedEndings.some((ending) => ALL_ENDINGS.slice(4).includes(ending as typeof ALL_ENDINGS[number])) },
+  { id: "collector", name: "八方命运", description: "收集全部 8 个结局", unlocked: (game) => ALL_ENDINGS.every((ending) => game.completedEndings.includes(ending)) },
 ];
 
 function getCharacter(characterId: CharacterId) {
@@ -696,6 +834,12 @@ function getStats(game: GameState): CharacterStats {
     speed: 10 + game.soulPower + talent,
     control: 14 + Math.floor(game.soulPower * 1.5) + talent * 2,
   };
+
+  const additionalRings = Math.max(0, game.soulRings.length - 1);
+  stats.maxHp += additionalRings * 24;
+  stats.attack += additionalRings * 5;
+  stats.defense += additionalRings * 4;
+  stats.control += additionalRings * 7;
 
   for (const itemId of Object.values(game.equipment)) {
     const bonus = itemId ? ITEMS[itemId]?.bonus : undefined;
@@ -874,8 +1018,30 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
     storyNarrative: resolution.narrative,
     storyNote: resolution.note,
   };
+  const secondRingFlag = Object.keys(SECOND_SOUL_RINGS).find((flag) => resolution.flags.includes(flag));
+  if (secondRingFlag && next.soulRings.length < 2) {
+    next = {
+      ...next,
+      soulRings: [...next.soulRings, SECOND_SOUL_RINGS[secondRingFlag]],
+      inventory: {
+        ...next.inventory,
+        millennium_essence: (next.inventory.millennium_essence ?? 0) + 1,
+      },
+      lastStoryChange: `第二魂环觉醒 · ${SECOND_SOUL_RINGS[secondRingFlag].name}`,
+    };
+  }
+  if (resolution.flags.includes("海神岛认可") && (next.inventory.tide_armor ?? 0) === 0) {
+    next = updateInventory(next, "tide_armor", 1);
+  }
   if (resolution.rewardItemId) next = updateInventory(next, resolution.rewardItemId, 1);
   return gainSoulExperience(next, resolution.experience);
+}
+
+function isLocationUnlocked(location: WorldLocation, game: GameState) {
+  return location.unlocked || (
+    location.id === "sea-god-island" &&
+    (game.storyFlags.includes("获得瀚海航图") || game.location === "海神岛")
+  );
 }
 
 function attributeMultiplier(attacker: SoulAttribute, defender: SoulAttribute) {
@@ -923,6 +1089,7 @@ function getLocationByName(name: string) {
 function getTravelStoryNode(locationId: LocationId) {
   if (locationId === "star-forest") return "forest_edge";
   if (locationId === "shrek-academy") return "shrek_gate";
+  if (locationId === "sea-god-island") return "sea_god_shore";
   return "notting_street";
 }
 
@@ -961,7 +1128,24 @@ export default function Prototype() {
   const game = session.game;
   const stats = useMemo(() => getStats(game), [game]);
   const selectedLocation = selectedLocationId
-    ? locations.find((location) => location.id === selectedLocationId) ?? null
+    ? (() => {
+        const location = locations.find((item) => item.id === selectedLocationId);
+        if (!location) return null;
+        const unlocked = isLocationUnlocked(location, game);
+        if (location.id !== "sea-god-island" || !unlocked) return { ...location, unlocked };
+        return {
+          ...location,
+          unlocked,
+          distance: "西海远航",
+          travelTime: "三日航程",
+          description: "被潮汐与传说包围的神秘岛屿。瀚海航图已经标出外围安全航线，真正的试炼将在登岛后开始。",
+          arrival: "清晨的海雾向两侧散开，高耸海崖与蓝色神殿出现在地平线。岛上的潮汐正以奇异节奏回应你的魂力。",
+          note: "已抵达海神岛。可以进入潮汐试炼，并追查深海魂晶的真正来源。",
+          season: "十一月·清晨",
+          questTitle: "通过潮汐试炼",
+          questDescription: "在风暴、幻境与魂兽守护中获得海神岛认可。",
+        };
+      })()
     : null;
   const selectedCharacter = selectedCharacterId
     ? characters.find((character) => character.id === selectedCharacterId) ?? null
@@ -1405,20 +1589,24 @@ export default function Prototype() {
     music.playEvent("boss_appears");
   };
 
-  const performCombatAction = (action: "basic" | "skill") => {
+  const performCombatAction = (action: CombatAction) => {
     if (!combat || combat.status !== "active") return;
     const enemy = ENEMIES.find((item) => item.id === combat.enemyId);
-    if (!enemy || (action === "skill" && combat.energy < 2)) return;
+    const secondRing = game.soulRings[1];
+    const energyCost = action === "secondSkill" ? 3 : action === "skill" ? 2 : 0;
+    if (!enemy || combat.energy < energyCost || (action === "secondSkill" && !secondRing)) return;
 
-    const isSkill = action === "skill";
+    const isSkill = action !== "basic";
+    const skillName = action === "secondSkill" ? secondRing.skillName : action === "skill" ? FIRST_SOUL_RING.skillName : "普通攻击";
     const attackAttribute: SoulAttribute = isSkill ? game.martialAttribute : "无";
     const multiplier = attributeMultiplier(attackAttribute, enemy.attribute);
-    const damage = calculateDamage(stats.attack, enemy.defense, isSkill ? 1.25 : 0.88, multiplier);
+    const power = action === "secondSkill" ? 1.62 : action === "skill" ? 1.25 : 0.88;
+    const damage = calculateDamage(stats.attack, enemy.defense, power, multiplier);
     const enemyHp = Math.max(0, combat.enemyHp - damage);
-    const energy = isSkill ? combat.energy - 2 : Math.min(4, combat.energy + 1);
-    const stunned = isSkill && combat.round % 2 === 1 && stats.control >= enemy.speed;
+    const energy = isSkill ? combat.energy - energyCost : Math.min(4, combat.energy + 1);
+    const stunned = isSkill && (action === "secondSkill" || combat.round % 2 === 1) && stats.control >= enemy.speed;
     const nextLog = [
-      `${isSkill ? FIRST_SOUL_RING.skillName : "普通攻击"}造成 ${damage} 点伤害${multiplier > 1 ? "，触发属性克制" : multiplier < 1 ? "，伤害受到压制" : ""}。`,
+      `${skillName}造成 ${damage} 点伤害${multiplier > 1 ? "，触发属性克制" : multiplier < 1 ? "，伤害受到压制" : ""}。`,
       ...combat.log,
     ];
 
@@ -1434,7 +1622,7 @@ export default function Prototype() {
               victories: current.victories + 1,
               coins: current.coins + enemy.coinReward,
               currentHp: Math.max(1, combat.playerHp),
-              narrative: `你在诺丁城外击败了${enemy.name}。${FIRST_SOUL_RING.skillName}在实战中变得更加凝练。`,
+              narrative: `你在${current.location}击败了${enemy.name}。${skillName}在实战中变得更加凝练。`,
               note: `${enemy.name}的${enemy.attribute}属性已记录。战利品：${ITEMS[enemy.lootId].name}。`,
             },
             enemy.lootId,
@@ -1801,9 +1989,12 @@ export default function Prototype() {
 
 function WelcomeScreen({ onStart }: { onStart: () => void }) {
   return (
-    <main className="screen-content welcome-screen">
+    <main
+      className="screen-content welcome-screen"
+      style={{ backgroundImage: `url("${publicAssetUrl("game-assets/notting-city.png")}")` }}
+    >
       <div className="welcome-emblem" aria-hidden="true">
-        <img src="/game-assets/soul-meter.png" alt="" />
+        <img src={publicAssetUrl("game-assets/soul-meter.png")} alt="" />
       </div>
       <p className="eyebrow">沉浸式开放世界文字 RPG</p>
       <h1>斗罗大陆<br />人生模拟器</h1>
@@ -1913,6 +2104,7 @@ function StoryScreen({
   const activeNpcAction = getNpcAction(game.pendingNpcAction);
   const activeNpcCharacter = activeNpcAction ? getCharacter(activeNpcAction.characterId) : null;
   const image = node.image ?? (node.location.includes("诺丁") ? "/game-assets/notting-city.png" : "/game-assets/world-map.png");
+  const terminalEnding = Boolean(node.endingName && node.choices.length === 0);
   return (
     <section className="story-screen" aria-label="当前剧情">
       <div className="story-chapter-bar"><span>{node.chapter}</span><strong>时间线 {game.storyCycle}</strong></div>
@@ -1921,7 +2113,7 @@ function StoryScreen({
         <SunIcon />
       </header>
       <div className="story-art">
-        <img src={image} alt={node.imageAlt ?? `${node.location}当前剧情场景`} />
+        <img src={publicAssetUrl(image)} alt={node.imageAlt ?? `${node.location}当前剧情场景`} />
         <span className="story-scene-title"><small>{node.quest}</small><strong>{node.title}</strong></span>
       </div>
       <article className="narrative-card">
@@ -1947,16 +2139,17 @@ function StoryScreen({
       ) : null}
       {node.endingName ? (
         <div className="story-ending-card">
-          <span className="section-kicker">本轮结局</span><h2>{node.endingName}</h2>
-          <p>已发现 {game.completedEndings.length} / 4 个结局。你可以在档案中回溯任意选择，或保留结局记录重新开始。</p>
+          <span className="section-kicker">{terminalEnding ? "最终结局" : "第一卷结局"}</span><h2>{node.endingName}</h2>
+          <p>{terminalEnding ? "这条跨越大陆与远海的时间线已经完整收束。" : "第一卷已完成，命运将继续通往天斗暗潮、魂师精英赛与海神岛。"} 已发现 {game.completedEndings.length} / {ALL_ENDINGS.length} 个结局。</p>
           <div className="ending-collection">
-            {["大陆守望者", "怪物同盟", "魂核君临者", "自由行者"].map((ending) => (
+            {ALL_ENDINGS.map((ending) => (
               <span className={game.completedEndings.includes(ending) ? "found" : ""} key={ending}>{game.completedEndings.includes(ending) ? ending : "未发现"}</span>
             ))}
           </div>
-          <button className="primary-button" type="button" onClick={onRestart}>开启下一条时间线</button>
+          {terminalEnding ? <button className="primary-button" type="button" onClick={onRestart}>开启下一条时间线</button> : null}
         </div>
-      ) : (
+      ) : null}
+      {!terminalEnding ? (
       <div className="option-list" aria-label="行动选项">
         {node.choices.map((choice, index) => {
           const locked = Boolean(choice.condition && !choice.condition(game));
@@ -1974,7 +2167,7 @@ function StoryScreen({
           <MagicWandIcon />
         </button>
       </div>
-      )}
+      ) : null}
       <aside className="note-card">
         <BookmarkIcon />
         <div><strong>{node.chapter} · {node.title}</strong><p>{game.storyNote}</p></div>
@@ -1999,20 +2192,23 @@ function WorldScreen({
     <section className="world-screen">
       <header className="page-title"><span>世界</span><GlobeIcon /></header>
       <div className="map-panel" aria-label="斗罗大陆旅行地图">
-        <img src="/game-assets/world-map.png" alt="斗罗大陆可探索区域地图" />
-        {locations.map((location) => (
+        <img src={publicAssetUrl("game-assets/world-map.png")} alt="斗罗大陆可探索区域地图" />
+        {locations.map((location) => {
+          const unlocked = isLocationUnlocked(location, game);
+          return (
           <button
-            className={`map-label ${location.className}${location.name === game.location ? " active" : ""}${location.unlocked ? "" : " locked"}`}
+            className={`map-label ${location.className}${location.name === game.location ? " active" : ""}${unlocked ? "" : " locked"}`}
             key={location.id}
             type="button"
             onClick={() => onSelectLocation(location.id)}
             aria-label={`${location.name}${location.name === game.location ? "，当前位置" : "，查看地点详情"}`}
             aria-pressed={location.name === game.location}
           >
-            {location.unlocked ? null : <LockClosedIcon aria-hidden="true" />}
+            {unlocked ? null : <LockClosedIcon aria-hidden="true" />}
             {location.name}
           </button>
-        ))}
+          );
+        })}
       </div>
       <article className="quest-card story-quest-card">
         <span className="quest-icon"><ReaderIcon /></span>
@@ -2049,15 +2245,14 @@ function RelationsScreen({
   onSelectCharacter: (characterId: CharacterId) => void;
 }) {
   const required = soulExperienceRequired(game.soulPower);
-  const ring = game.soulRings[0];
   return (
     <section className="relations-screen">
       <header className="profile-header">
-        <div className="spirit-mark"><img src="/game-assets/blue-silver-grass.png" alt="蓝银草武魂徽记" /></div>
+        <div className="spirit-mark"><img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂徽记" /></div>
         <div><h1>{game.name}</h1><p>魂力 <strong>{game.soulPower}级</strong></p><p>武魂 <strong>{game.martialSoul} · {game.martialAttribute}</strong></p></div>
       </header>
       <div className="soul-meter compact-soul-meter">
-        <img src="/game-assets/soul-meter.png" alt="魂力进度圆环" />
+        <img src={publicAssetUrl("game-assets/soul-meter.png")} alt="魂力进度圆环" />
         <div><small>魂力</small><strong>{game.soulPower}<em>级</em></strong><span>{game.soulProgress} / {required}</span></div>
       </div>
       <div className="experience-track" role="progressbar" aria-label="魂力升级进度" aria-valuemin={0} aria-valuemax={required} aria-valuenow={game.soulProgress}>
@@ -2075,14 +2270,21 @@ function RelationsScreen({
       </div>
 
       <h2 className="section-title">魂环与魂技</h2>
-      <article className="soul-ring-card">
-        <span className="ring-orb" aria-hidden="true" />
-        <div><small>第一魂环 · {ring.age} 年</small><h3>{ring.name}</h3><p>{ring.attribute}属性</p></div>
-      </article>
-      <article className="soul-skill-card">
-        <span><MagicWandIcon /></span>
-        <div><small>第一魂技 · 消耗 2 点魂力</small><h3>{ring.skillName}</h3><p>{ring.skillDescription}</p></div>
-      </article>
+      {game.soulRings.map((ring, index) => {
+        const ordinal = index === 0 ? "第一" : "第二";
+        return (
+          <div className="soul-ring-group" key={ring.id}>
+            <article className="soul-ring-card">
+              <span className={`ring-orb ${ring.age >= 1000 ? "millennium" : ""}`} aria-hidden="true" />
+              <div><small>{ordinal}魂环 · {ring.age} 年</small><h3>{ring.name}</h3><p>{ring.attribute}属性</p></div>
+            </article>
+            <article className="soul-skill-card">
+              <span><MagicWandIcon /></span>
+              <div><small>{ordinal}魂技 · 消耗 {index === 0 ? 2 : 3} 点魂力</small><h3>{ring.skillName}</h3><p>{ring.skillDescription}</p></div>
+            </article>
+          </div>
+        );
+      })}
       <aside className="counter-card"><strong>属性克制</strong><p>植物克水，水克火，火克植物；克制伤害 ×1.35，被克制伤害 ×0.75。</p></aside>
 
       <h2 className="section-title">人物关系</h2>
@@ -2378,7 +2580,7 @@ function CombatSheet({
   stats: CharacterStats;
   combat: CombatState;
   enemy: EnemyDefinition;
-  onAction: (action: "basic" | "skill") => void;
+  onAction: (action: CombatAction) => void;
   onClose: () => void;
 }) {
   const counter = getCounterText(game.martialAttribute, enemy.attribute);
@@ -2386,7 +2588,7 @@ function CombatSheet({
     <div className="combat-sheet">
       <div className="combat-opponents">
         <article>
-          <span className="combat-avatar player"><img src="/game-assets/blue-silver-grass.png" alt="蓝银草武魂" /></span>
+          <span className="combat-avatar player"><img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂" /></span>
           <small>{game.name}</small><strong>{game.soulPower}级 · {game.martialAttribute}</strong>
           <div className="health-track" role="progressbar" aria-label="玩家生命" aria-valuemin={0} aria-valuemax={stats.maxHp} aria-valuenow={combat.playerHp}>
             <i style={{ width: `${(combat.playerHp / stats.maxHp) * 100}%` }} />
@@ -2418,6 +2620,11 @@ function CombatSheet({
           <button type="button" onClick={() => onAction("skill")} disabled={combat.energy < 2}>
             <span>第一魂技 · {FIRST_SOUL_RING.skillName}</span><small>消耗 2 点魂力 · 植物伤害</small>
           </button>
+          {game.soulRings[1] ? (
+            <button className="second-soul-skill" type="button" onClick={() => onAction("secondSkill")} disabled={combat.energy < 3}>
+              <span>第二魂技 · {game.soulRings[1].skillName}</span><small>消耗 3 点魂力 · 强控与高额伤害</small>
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className={`combat-result ${combat.status}`}>
@@ -2443,12 +2650,13 @@ function ArchiveScreen({ session, musicMuted, musicReady, onToggleMusic, onSave,
   const storyNode = getStoryNode(game);
   const timeline = [...session.nodes].sort((a, b) => b.sequence - a.sequence);
   const branchCount = new Set(session.nodes.map((node) => node.branchId)).size;
+  const unlockedAchievements = ACHIEVEMENTS.filter((achievement) => achievement.unlocked(game));
   return (
     <section className="archive-screen">
       <header className="page-title"><span>档案与时间线</span><ArchiveIcon /></header>
       <article className="save-card">
         <small>{storyNode.chapter}</small><h2>{game.location} · 第 {game.turns + 1} 轮</h2><p>{game.name} · {game.identity} · {game.talent}</p>
-        <div className="archive-stat-row"><span>{session.nodes.length} 个节点</span><span>{branchCount} 条分支</span><span>结局 {game.completedEndings.length}/4</span><span>回溯 {game.rewinds} 次</span></div>
+        <div className="archive-stat-row"><span>{session.nodes.length} 个节点</span><span>{branchCount} 条分支</span><span>结局 {game.completedEndings.length}/{ALL_ENDINGS.length}</span><span>回溯 {game.rewinds} 次</span></div>
         <button className="primary-button" type="button" onClick={onSave}><BookmarkIcon />保存完整档案</button>
       </article>
 
@@ -2466,6 +2674,22 @@ function ArchiveScreen({ session, musicMuted, musicReady, onToggleMusic, onSave,
         </span>
         <span>{musicMuted ? "开启" : "关闭"}</span>
       </button>
+
+      <div className="achievement-heading">
+        <div><span className="section-kicker">命运印记</span><h2>成就图鉴</h2></div>
+        <strong>{unlockedAchievements.length} / {ACHIEVEMENTS.length}</strong>
+      </div>
+      <div className="achievement-grid">
+        {ACHIEVEMENTS.map((achievement) => {
+          const unlocked = achievement.unlocked(game);
+          return (
+            <article className={unlocked ? "achievement-card unlocked" : "achievement-card"} key={achievement.id}>
+              <span>{unlocked ? "✦" : "◇"}</span>
+              <div><strong>{unlocked ? achievement.name : "未解锁印记"}</strong><small>{achievement.description}</small></div>
+            </article>
+          );
+        })}
+      </div>
 
       <div className="timeline-heading"><div><span className="section-kicker">完整历史</span><h2>选择回溯节点</h2></div><ReloadIcon /></div>
       <p className="timeline-help">回溯会消耗 1 次机会，并从所选节点建立新支线；原有历史不会被删除。</p>

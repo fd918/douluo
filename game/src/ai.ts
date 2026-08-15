@@ -28,8 +28,10 @@ type AiResponse<T> = {
   };
 };
 
+const AI_GENERATE_ENDPOINT = import.meta.env.VITE_AI_ENDPOINT?.trim() || "/api/ai/generate";
+
 async function generate<T>(kind: "action" | "dialogue" | "summary", payload: unknown): Promise<T> {
-  const response = await fetch("/api/ai/generate", {
+  const response = await fetch(AI_GENERATE_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ kind, payload }),

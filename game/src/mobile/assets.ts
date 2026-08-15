@@ -1,6 +1,8 @@
+import { publicAssetUrl } from "../publicAsset";
+
 export const mobileAssets = {
-  iphoneBezel: "/assets/iphone/Bezel.png",
-  iphoneKeyboard: "/assets/iphone/Keyboard.png",
-  androidKeyboard: "/assets/android/Keyboard.png",
-  pixel10Bezel: "/assets/android/Pixel10.png",
+  iphoneBezel: publicAssetUrl("assets/iphone/Bezel.png"),
+  iphoneKeyboard: publicAssetUrl("assets/iphone/Keyboard.png"),
+  androidKeyboard: publicAssetUrl("assets/android/Keyboard.png"),
+  pixel10Bezel: publicAssetUrl("assets/android/Pixel10.png"),
 } as const;

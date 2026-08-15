@@ -81,6 +81,26 @@ test("reports AI configuration without exposing the API key", async () => {
   assert.equal(JSON.stringify(result).includes("test-secret-not-real"), false);
 });
 
+test("allows the short GitHub Pages frontend to call the protected AI worker", async () => {
+  const origin = "https://fd918.github.io";
+  const preflight = await worker.fetch(
+    new Request("https://example.test/api/ai/generate", {
+      method: "OPTIONS",
+      headers: { origin, "access-control-request-method": "POST" },
+    }),
+    {},
+  );
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+  assert.equal(preflight.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
+
+  const denied = await worker.fetch(
+    new Request("https://example.test/api/ai/status", { headers: { origin: "https://untrusted.example" } }),
+    {},
+  );
+  assert.equal(denied.headers.has("access-control-allow-origin"), false);
+});
+
 test("falls back to the secondary AI provider without exposing either key", async () => {
   const calls = [];
   const response = await handleAiRequest(

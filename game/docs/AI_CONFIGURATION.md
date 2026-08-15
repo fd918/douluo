@@ -97,7 +97,9 @@ AI_REQUEST_TIMEOUT_MS=120000
 
 ## 公网部署
 
-上线后不上传 `.env.local`。应在部署平台的“环境变量”或“Secrets（密钥）”页面创建主服务四项、两项调用限制；如需备用服务，再创建四项 `AI_FALLBACK_` 配置。密钥项必须标记为 Secret（加密密钥）。
+上线后不上传 `.env.local`。公网架构为 GitHub Pages 静态前端 `https://fd918.github.io/douluo/` + Sites Worker AI 服务端。真实密钥、模型和限流只存在 Sites 生产环境变量，前端仅保存公开的 AI 代理接口地址。
+
+更换公网版本的 AI 服务商时，在 Sites 项目的生产环境变量中整体替换 `AI_BASE_URL`、`AI_MODEL_ID`、`AI_API_KEY`，保存后重新部署 Worker。不需要改 GitHub Pages 代码或重新填入前端。
 
 更换公网版本的服务商时，也只在部署平台修改前三项并重新部署，不修改或重新打包前端代码。GitHub Pages 只能托管静态文件，无法安全保存密钥或运行本项目的服务端接口；公网版本需要使用支持服务端函数或 Worker 和加密环境变量的平台。
 
