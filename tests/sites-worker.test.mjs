@@ -286,13 +286,33 @@ test("allows the short GitHub Pages frontend to call the protected AI worker", a
   );
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
-  assert.equal(preflight.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
+  assert.equal(preflight.headers.get("access-control-allow-methods"), "GET, POST, PUT, OPTIONS");
 
   const denied = await worker.fetch(
     new Request("https://example.test/api/ai/status", { headers: { origin: "https://untrusted.example" } }),
     {},
   );
   assert.equal(denied.headers.has("access-control-allow-origin"), false);
+});
+
+test("allows the localhost operations console to preflight cloud management requests", async () => {
+  const origin = "http://127.0.0.1:4180";
+  const preflight = await worker.fetch(
+    new Request("https://example.test/api/ops/providers", {
+      method: "OPTIONS",
+      headers: {
+        origin,
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    }),
+    {},
+  );
+
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+  assert.equal(preflight.headers.get("access-control-allow-methods"), "GET, POST, PUT, OPTIONS");
+  assert.equal(preflight.headers.get("access-control-allow-headers"), "authorization, content-type");
 });
 
 test("falls back to the secondary AI provider without exposing either key", async () => {
