@@ -7,7 +7,7 @@
 - The user selected the third generated direction: dark navy, antique gold, cyan and violet soul-energy effects, and a dense premium mobile-game HUD.
 - Reuse the original assets in `public/game-assets/`; never replace character portraits, the Blue Silver Grass emblem, map, city background, or soul meter with placeholders.
 - Keep the five-tab navigation order: 剧情、世界、关系、行囊、档案.
-- The current version uses a hybrid story engine. AI integration must use the same-origin server adapter and must never expose an API key in browser code. A primary and optional fallback OpenAI-compatible provider are configured through server-side environment variables.
+- The current version uses a hybrid story engine. Sites uses the same-origin server adapter and server-side provider keys. GitHub Pages uses an explicitly player-owned browser AI mode: address, model and key are entered by the player, stored only in that browser, and enabled only after a successful connection test. Never embed, log or commit a real key; failed or missing player configuration must immediately fall back to the local story engine.
 - Preserve the save keys `douluo-life-simulator-save-v2` and `douluo-life-simulator-save-v1`; releases must migrate old saves rather than silently resetting them.
 - Original dynamic music belongs in `public/audio/douluo/`, uses `douluo.audio.settings.v1`, and follows `docs/AUDIO_INTEGRATION.md`. Do not reuse or rename archived 斗破 music.
 - Keep a 44px sound shortcut in the story header and the full setting in Archive; both controls must share the same persisted state. Story-choice feedback stays subtle and follows the same mute setting.
@@ -17,7 +17,7 @@
 - Clearing the local save through “重新创建角色” is destructive and must always require a second confirmation that lists the affected character, timeline, endings, relationships, inventory and battle records.
 - Runtime image references should use the `*-mobile.webp` derivatives in `public/game-assets/`; keep the original PNG assets unchanged as source files.
 - Real phones use the native full-screen presentation with browser safe areas and the system keyboard. The iPhone / Pixel frame, picker, simulated status bar and keyboard are desktop-preview features only; `?preview=1` and `?native=1` are debug overrides.
-- The public short URL is hosted at `https://fd918.github.io/douluo/`. Static assets must use `publicAssetUrl`, GitHub Pages builds use the `/douluo/` base path, and AI remains on the Sites Worker with an explicit allowlisted CORS origin.
+- The public short URL is hosted at `https://fd918.github.io/douluo/`. Static assets must use `publicAssetUrl`, GitHub Pages builds use the `/douluo/` base path, and the Pages build must use player-owned browser AI without a bundled key. The Sites deployment keeps the managed Worker/D1 AI path.
 
 ## Prototype Instructions
 

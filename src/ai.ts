@@ -36,6 +36,18 @@ export type AiSummaryResult = {
   summary: string;
 };
 
+export {
+  DEFAULT_BROWSER_AI_CONFIG,
+  clearBrowserAiConfig,
+  loadBrowserAiConfig,
+  saveBrowserAiConfig,
+  testBrowserAiConfig,
+  type BrowserAiConfig,
+  type BrowserAiTestResult,
+} from "./browserAi";
+
+import { generateWithBrowserAi, loadBrowserAiConfig } from "./browserAi";
+
 type AiResponse<T> = {
   ok: true;
   data: T;
@@ -51,8 +63,12 @@ type AiResponse<T> = {
 };
 
 const AI_GENERATE_ENDPOINT = import.meta.env.VITE_AI_ENDPOINT?.trim() || "/api/ai/generate";
+const DIRECT_AI_ONLY = import.meta.env.VITE_AI_DIRECT_ONLY === "1";
 
 async function generate<T>(kind: "action" | "dialogue" | "summary", payload: unknown): Promise<T> {
+  const browserConfig = loadBrowserAiConfig();
+  if (browserConfig.enabled) return generateWithBrowserAi<T>(kind, payload, browserConfig);
+  if (DIRECT_AI_ONLY) throw new Error("AI_NOT_CONFIGURED");
   const response = await fetch(AI_GENERATE_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },

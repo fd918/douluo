@@ -1259,6 +1259,47 @@ textarea:focus-visible {
 .audio-setting-button:disabled { opacity: 0.45; }
 .audio-setting-button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .narration-setting-button { margin-top: 9px; border-color: rgba(230, 189, 104, 0.3); }
+.ai-setting-button { margin-top: 9px; border-color: rgba(169, 133, 255, 0.32); color: #bda3ff; }
+.ai-setting-button.connected { border-color: rgba(98, 218, 143, 0.44); box-shadow: inset 0 0 18px rgba(98, 218, 143, 0.05); }
+
+.bottom-sheet:has(.ai-settings-sheet) {
+  color: var(--text);
+  border-top: 1px solid rgba(169, 133, 255, 0.42);
+  background: linear-gradient(180deg, #101c31 0%, #091321 100%);
+  box-shadow: 0 -18px 56px rgba(1, 6, 14, 0.76);
+}
+
+.ai-settings-sheet { display: grid; gap: 9px; padding: 2px 0 20px; }
+.ai-settings-sheet label { margin-top: 4px; color: #ddcda5; font-size: 12px; font-weight: 700; }
+.ai-settings-sheet input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid rgba(127, 158, 193, 0.35);
+  border-radius: 11px;
+  color: #f4e8ca;
+  background: rgba(7, 18, 32, 0.9);
+  outline: none;
+}
+.ai-settings-sheet input:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(88, 216, 239, 0.12); }
+.ai-settings-sheet input::placeholder { color: #718198; }
+.ai-connection-status { min-height: 62px; display: flex; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid rgba(230, 189, 104, 0.25); border-radius: 12px; background: rgba(17, 31, 49, 0.75); }
+.ai-connection-status > span { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px rgba(230, 189, 104, 0.5); }
+.ai-connection-status.connected { border-color: rgba(98, 218, 143, 0.32); }
+.ai-connection-status.connected > span { background: #62da8f; box-shadow: 0 0 12px rgba(98, 218, 143, 0.62); }
+.ai-connection-status strong,
+.ai-connection-status small { display: block; }
+.ai-connection-status strong { color: #f0dfb6; font-size: 13px; }
+.ai-connection-status small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.ai-privacy-note { margin: 2px 0 3px; color: #8595aa; font-size: 10px; line-height: 1.65; }
+.ai-test-feedback { min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid; border-radius: 10px; font-size: 11px; line-height: 1.5; }
+.ai-test-feedback svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.ai-test-feedback.success { color: #bceccb; border-color: rgba(98, 218, 143, 0.32); background: rgba(30, 93, 57, 0.2); }
+.ai-test-feedback.error { color: #efb1b4; border-color: rgba(208, 108, 112, 0.38); background: rgba(94, 34, 42, 0.2); }
+.ai-test-button { width: 100%; min-height: 48px; margin-top: 3px; }
+.spin-icon { animation: ai-spin 0.9s linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin-icon { animation: none; } }
 
 .save-toast {
   position: absolute;

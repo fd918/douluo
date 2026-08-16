@@ -29,7 +29,7 @@ jobs:
         run: npm ci
       - name: 构建短地址版本
         env:
-          VITE_AI_ENDPOINT: https://douluo-life-simulator.fendou913006836.chatgpt.site/api/ai/generate
+          VITE_AI_DIRECT_ONLY: "1"
         run: npm run build:pages
       - name: 配置 GitHub Pages
         uses: actions/configure-pages@v5
