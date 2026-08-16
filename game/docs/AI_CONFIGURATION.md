@@ -91,15 +91,32 @@ AI_REQUEST_TIMEOUT_MS=120000
 
 - `AI_REQUESTS_PER_MINUTE`：单个访问来源每分钟最多请求数，默认 12。
 - `AI_DAILY_REQUEST_LIMIT`：单个访问来源每天最多请求数，默认 120。
+- `AI_RATE_LIMIT_SALT`：可选的来源摘要加盐值，建议在生产环境填写一段随机字符串，只保存在部署平台环境变量中。
 - 超过限制时接口返回 429，前端会自动使用本地剧情继续游玩。
 
-当前限制保存在 Worker 运行实例内，适合首发和小规模试玩。访问量明显增加后，应改用部署平台持久化限流或数据库计数，不能把当前实现当作精确计费账本。
+公网版本通过 `.openai/hosting.json` 中的 `DB` 逻辑绑定使用 Sites D1 持久化计数。计数表为 `ai_request_budgets`，迁移文件位于 `drizzle/0001_ai_request_budgets.sql`，结构定义位于 `db/schema.ts`。同一来源的分钟计数和每日计数由一条原子 SQL 同时判断并增加，多实例之间不会各自拥有一份独立额度。
+
+数据库只保存访问来源经过 SHA-256 处理后的不可逆摘要，不保存原始 IP。生产环境建议额外设置 `AI_RATE_LIMIT_SALT`；该值属于敏感配置，不得写入 Git、公开文档或截图。
+
+如果本机开发没有 `DB` 绑定，系统会自动使用内存限流。如果线上 D1 暂时不可用，也会回退到内存保护并继续尝试 AI 请求，避免数据库故障直接中断剧情；这种回退只保证基础防刷，不是跨实例精确账本。
+
+部署后打开 `/api/ai/status` 检查 `limits`：
+
+- `storage: "d1"`、`persistent: true`：已经识别到 D1 持久化绑定。
+- `storage: "memory"`、`persistent: false`：当前没有 D1，正在使用单实例内存保护。
+- `fallback: "memory"`：D1 请求异常时的安全回退方式。
+
+限流响应统一包含 `ok: false`、中文 `error` 和稳定的 `code`。分钟额度耗尽时为 `AI_RATE_LIMITED`，每日额度耗尽时为 `AI_DAILY_LIMIT`，同时通过 `Retry-After` 响应头告诉调用方最早重试时间。
 
 ## 公网部署
 
 上线后不上传 `.env.local`。公网架构为 GitHub Pages 静态前端 `https://fd918.github.io/douluo/` + Sites Worker AI 服务端。真实密钥、模型和限流只存在 Sites 生产环境变量，前端仅保存公开的 AI 代理接口地址。
 
 更换公网版本的 AI 服务商时，在 Sites 项目的生产环境变量中整体替换 `AI_BASE_URL`、`AI_MODEL_ID`、`AI_API_KEY`，保存后重新部署 Worker。不需要改 GitHub Pages 代码或重新填入前端。
+
+首次启用持久化限流时，保持 `.openai/hosting.json` 的 `d1` 为 `"DB"`，并随 Sites 构建发布 `drizzle/0001_ai_request_budgets.sql`。部署平台会把逻辑名称 `DB` 注入 Worker；不需要把数据库账号、连接地址或密码写进代码。部署完成后用 `/api/ai/status` 验证 `limits.storage` 是否为 `d1`。
+
+这是新增独立表，不修改玩家存档，也没有历史业务数据需要迁移或备份。迁移使用 `CREATE TABLE IF NOT EXISTS`，可重复执行。若需回退，先把 `.openai/hosting.json` 的 `d1` 改回 `null` 并重新部署，Worker 会自动改用内存限流；保留表不会影响游戏，确认无需审计旧计数后再由部署平台删除。验证回退时 `/api/ai/status` 应显示 `storage: "memory"`，且自由行动仍能正常调用 AI 或回退本地剧情。
 
 更换公网版本的服务商时，也只在部署平台修改前三项并重新部署，不修改或重新打包前端代码。GitHub Pages 只能托管静态文件，无法安全保存密钥或运行本项目的服务端接口；公网版本需要使用支持服务端函数或 Worker 和加密环境变量的平台。
 

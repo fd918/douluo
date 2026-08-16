@@ -1,6 +1,6 @@
 {
   "scripts/check-mobile-runtime.mjs": "ee85738cc2ef889c0b457d8ccac61e017b8c5d16f393e766ec9fb7d11c9aff7f",
-  "scripts/prepare-sites-build.mjs": "48394777c43a394e8d59ca9dc7adc8dafae644f731b696ca6d6533abd1398eb1",
+  "scripts/prepare-sites-build.mjs": "c8b5dea178295fd10fac7d5fe9e6647b94bbbae27740897b524a13c381cc3910",
   "scripts/update-mobile-runtime-lock.mjs": "2708036ed45467e458fd1f32b466a81439fb36b58f39e0bb58a14c3df0845c10",
   "vite.config.ts": "7c3dda40646eab270db8a983a72704aa0e53d209d90b2c6b2b9695c506f14c5f",
   "src/App.tsx": "7054b4e14304ab33153d3a2e860aa43d2a4f69e8a69630b4a37a2cbcd4ad2f16",

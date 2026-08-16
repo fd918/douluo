@@ -1,7 +1,29 @@
+export type AiWorldDirective = {
+  eventTitle: string;
+  eventType: "探索" | "关系" | "势力" | "战斗" | "交易" | "奇遇";
+  summary: string;
+  factionId?: string;
+  reputationDelta?: number;
+  coinDelta?: number;
+  experienceDelta?: number;
+  locationId?: string;
+  addFlag?: string;
+  rewardItemId?: string;
+  quest?: {
+    id?: string;
+    title: string;
+    objective: string;
+    source?: string;
+    target?: number;
+    rewardText?: string;
+  };
+};
+
 export type AiActionResult = {
   narrative: string;
   note: string;
   memory: string;
+  worldDirective?: AiWorldDirective;
 };
 
 export type AiDialogueResult = {

@@ -7,6 +7,57 @@ const MAX_MESSAGE_LENGTH = 300;
 const DEFAULT_REQUESTS_PER_MINUTE = 12;
 const DEFAULT_DAILY_REQUEST_LIMIT = 120;
 const requestBuckets = new Map();
+const budgetSchemaPromises = new WeakMap();
+
+const CREATE_BUDGET_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS ai_request_budgets (
+    client_key TEXT PRIMARY KEY NOT NULL,
+    minute_key TEXT NOT NULL,
+    minute_count INTEGER NOT NULL DEFAULT 0 CHECK (minute_count >= 0),
+    day_key TEXT NOT NULL,
+    day_count INTEGER NOT NULL DEFAULT 0 CHECK (day_count >= 0),
+    touched_at INTEGER NOT NULL
+  )
+`;
+
+const CONSUME_BUDGET_SQL = `
+  INSERT INTO ai_request_budgets (
+    client_key, minute_key, minute_count, day_key, day_count, touched_at
+  ) VALUES (?, ?, 1, ?, 1, ?)
+  ON CONFLICT(client_key) DO UPDATE SET
+    minute_key = excluded.minute_key,
+    minute_count = CASE
+      WHEN ai_request_budgets.minute_key = excluded.minute_key
+        THEN ai_request_budgets.minute_count + 1
+      ELSE 1
+    END,
+    day_key = excluded.day_key,
+    day_count = CASE
+      WHEN ai_request_budgets.day_key = excluded.day_key
+        THEN ai_request_budgets.day_count + 1
+      ELSE 1
+    END,
+    touched_at = excluded.touched_at
+  WHERE
+    (CASE
+      WHEN ai_request_budgets.minute_key = excluded.minute_key
+        THEN ai_request_budgets.minute_count
+      ELSE 0
+    END) < ?
+    AND
+    (CASE
+      WHEN ai_request_budgets.day_key = excluded.day_key
+        THEN ai_request_budgets.day_count
+      ELSE 0
+    END) < ?
+  RETURNING minute_count, day_count
+`;
+
+const READ_BUDGET_SQL = `
+  SELECT minute_key, minute_count, day_key, day_count
+  FROM ai_request_budgets
+  WHERE client_key = ?
+`;
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,6 +67,15 @@ function jsonResponse(body, status = 200) {
       "cache-control": "no-store",
     },
   });
+}
+
+function errorResponse(code, message, status, options = {}) {
+  const response = jsonResponse({ ok: false, error: message, code }, status);
+  if (options.retryAfterSeconds) {
+    response.headers.set("retry-after", String(options.retryAfterSeconds));
+  }
+  if (options.allow) response.headers.set("allow", options.allow);
+  return response;
 }
 
 function cleanText(value, maxLength) {
@@ -77,15 +137,50 @@ function getProviderPublicInfo(provider) {
   };
 }
 
-function checkRequestBudget(request, config) {
-  const clientKey = cleanText(
+function getClientSource(request) {
+  return cleanText(
     request.headers.get("cf-connecting-ip")
       || request.headers.get("x-forwarded-for")?.split(",")[0]
       || request.headers.get("x-real-ip")
       || "local",
     120,
   );
-  const now = new Date();
+}
+
+async function hashClientSource(source, salt = "") {
+  const value = new TextEncoder().encode(`douluo-ai-budget:${salt}:${source}`);
+  const digest = await crypto.subtle.digest("SHA-256", value);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function getRetryAfterSeconds(kind, now) {
+  if (kind === "day") {
+    const nextDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    return Math.max(1, Math.ceil((nextDay - now.getTime()) / 1000));
+  }
+  return Math.max(1, 60 - now.getUTCSeconds());
+}
+
+function deniedBudget(kind, now, storage) {
+  if (kind === "minute") {
+    return {
+      allowed: false,
+      code: "AI_RATE_LIMITED",
+      message: "请求过于频繁，请稍后再试",
+      retryAfterSeconds: getRetryAfterSeconds("minute", now),
+      storage,
+    };
+  }
+  return {
+    allowed: false,
+    code: "AI_DAILY_LIMIT",
+    message: "今日 AI 剧情额度已经用完，本地剧情仍可继续游玩",
+    retryAfterSeconds: getRetryAfterSeconds("day", now),
+    storage,
+  };
+}
+
+function checkMemoryRequestBudget(clientKey, config, now = new Date(), storage = "memory") {
   const minuteKey = now.toISOString().slice(0, 16);
   const dayKey = now.toISOString().slice(0, 10);
   const current = requestBuckets.get(clientKey);
@@ -97,10 +192,10 @@ function checkRequestBudget(request, config) {
     touchedAt: Date.now(),
   };
   if (bucket.minuteCount >= config.requestsPerMinute) {
-    return { allowed: false, code: "AI_RATE_LIMITED", message: "请求过于频繁，请稍后再试" };
+    return deniedBudget("minute", now, storage);
   }
   if (bucket.dayCount >= config.dailyRequestLimit) {
-    return { allowed: false, code: "AI_DAILY_LIMIT", message: "今日 AI 剧情额度已经用完，本地剧情仍可继续游玩" };
+    return deniedBudget("day", now, storage);
   }
   bucket.minuteCount += 1;
   bucket.dayCount += 1;
@@ -111,7 +206,63 @@ function checkRequestBudget(request, config) {
       if (value.touchedAt < expiry) requestBuckets.delete(key);
     }
   }
-  return { allowed: true };
+  return { allowed: true, storage };
+}
+
+function hasPersistentBudgetStore(env) {
+  return Boolean(env?.DB && typeof env.DB.prepare === "function");
+}
+
+async function ensureBudgetSchema(db) {
+  let pending = budgetSchemaPromises.get(db);
+  if (!pending) {
+    pending = db.prepare(CREATE_BUDGET_TABLE_SQL).run().catch((error) => {
+      budgetSchemaPromises.delete(db);
+      throw error;
+    });
+    budgetSchemaPromises.set(db, pending);
+  }
+  await pending;
+}
+
+async function checkPersistentRequestBudget(clientKey, db, config, now = new Date()) {
+  await ensureBudgetSchema(db);
+  const minuteKey = now.toISOString().slice(0, 16);
+  const dayKey = now.toISOString().slice(0, 10);
+  const consumed = await db.prepare(CONSUME_BUDGET_SQL)
+    .bind(
+      clientKey,
+      minuteKey,
+      dayKey,
+      now.getTime(),
+      config.requestsPerMinute,
+      config.dailyRequestLimit,
+    )
+    .first();
+  if (consumed) return { allowed: true, storage: "d1" };
+
+  const current = await db.prepare(READ_BUDGET_SQL).bind(clientKey).first();
+  const minuteCount = current?.minute_key === minuteKey ? Number(current.minute_count) : 0;
+  if (minuteCount >= config.requestsPerMinute) return deniedBudget("minute", now, "d1");
+  const dayCount = current?.day_key === dayKey ? Number(current.day_count) : 0;
+  if (dayCount >= config.dailyRequestLimit) return deniedBudget("day", now, "d1");
+
+  // A concurrent first write can briefly make the conditional upsert return no row.
+  // Falling back to the local guard keeps the request protected without failing gameplay.
+  return checkMemoryRequestBudget(clientKey, config, now, "memory-fallback");
+}
+
+async function checkRequestBudget(request, env, config) {
+  const source = getClientSource(request);
+  const localClientKey = await hashClientSource(source, cleanText(env?.AI_RATE_LIMIT_SALT, 500));
+  if (!hasPersistentBudgetStore(env)) {
+    return checkMemoryRequestBudget(localClientKey, config);
+  }
+  try {
+    return await checkPersistentRequestBudget(localClientKey, env.DB, config);
+  } catch {
+    return checkMemoryRequestBudget(localClientKey, config, new Date(), "memory-fallback");
+  }
 }
 
 function parseModelJson(content) {
@@ -159,12 +310,14 @@ function getMessageContent(body) {
 function createActionPrompt(payload) {
   const action = cleanText(payload?.action, MAX_ACTION_LENGTH);
   if (!action) return null;
+  const worldMode = payload?.mode === "world";
   const context = {
     玩家: {
       姓名: cleanText(payload?.player?.name, 40),
       身份: cleanText(payload?.player?.identity, 40),
       天赋: cleanText(payload?.player?.talent, 40),
       魂力等级: clampInteger(payload?.player?.soulPower, 0, 999, 0),
+      武魂: cleanText(payload?.player?.martialSoul, 80),
     },
     当前场景: {
       章节: cleanText(payload?.scene?.chapter, 60),
@@ -176,19 +329,48 @@ function createActionPrompt(payload) {
     阶段剧情摘要: cleanText(payload?.storySummary, 700),
     已有线索: safeArray(payload?.flags, 12).map((item) => cleanText(item, 60)).filter(Boolean),
     近期共同记忆: safeArray(payload?.memories, 6).map((item) => cleanText(item, 160)).filter(Boolean),
+    世界导演约束: worldMode ? {
+      当前日期: clampInteger(payload?.world?.day, 1, 1000000, 1),
+      势力声望: safeArray(payload?.world?.reputations, 10).map((item) => ({
+        id: cleanText(item?.id, 60),
+        name: cleanText(item?.name, 60),
+        score: clampInteger(item?.score, -100, 100, 0),
+      })),
+      可用势力ID: safeArray(payload?.world?.factionIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      可用地点ID: safeArray(payload?.world?.locationIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      可奖励物品ID: safeArray(payload?.world?.rewardItemIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      可新增标记ID: safeArray(payload?.world?.flagIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      本地事件参考: cleanText(
+        typeof payload?.world?.localEvent === "string"
+          ? payload.world.localEvent
+          : JSON.stringify(payload?.world?.localEvent ?? {}),
+        500,
+      ),
+    } : undefined,
     玩家行动: action,
   };
+  const responseInstruction = worldMode
+    ? "只返回 JSON：{\"narrative\":\"剧情结果\",\"note\":\"影响\",\"memory\":\"伙伴记忆\",\"worldDirective\":{\"eventTitle\":\"事件名\",\"eventType\":\"探索\",\"summary\":\"事件摘要\",\"factionId\":\"白名单ID\",\"reputationDelta\":1,\"coinDelta\":0,\"experienceDelta\":80,\"locationId\":\"白名单ID\",\"addFlag\":\"白名单ID\",\"rewardItemId\":\"白名单ID\",\"quest\":{\"title\":\"支线名\",\"objective\":\"目标\",\"target\":1,\"rewardText\":\"奖励说明\"}}}。没有必要的字段可省略。"
+    : "只返回 JSON：{\"narrative\":\"剧情结果\",\"note\":\"获得的线索或影响\",\"memory\":\"一名伙伴会记住的内容\"}。";
   return {
     system: [
-      "你是《斗罗大陆人生模拟器》的剧情引擎。",
+      worldMode ? "你是《斗罗大陆人生模拟器》的世界导演。" : "你是《斗罗大陆人生模拟器》的剧情引擎。",
       "根据玩家行动续写一次事件结果，保持东方玄幻氛围和既有设定连贯。",
       "不要照抄小说原文，不替玩家做未选择的重大决定，不新增无法解释的神器或无敌能力。",
+      worldMode ? "世界变化只能使用用户上下文给出的势力、地点、物品和标记 ID；数值变化必须克制，不能直接改变主线结局。" : "",
       "避免露骨色情、重度血腥和现实违法指导。",
-      "只返回 JSON：{\"narrative\":\"剧情结果\",\"note\":\"获得的线索或影响\",\"memory\":\"一名伙伴会记住的内容\"}。",
+      responseInstruction,
       "narrative 80到180个汉字，note 20到60个汉字，memory 20到80个汉字。",
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
     user: JSON.stringify(context),
     schema: "action",
+    worldMode,
+    worldLimits: worldMode ? {
+      factionIds: safeArray(payload?.world?.factionIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      locationIds: safeArray(payload?.world?.locationIds, 12).map((item) => cleanText(item, 60)).filter(Boolean),
+      rewardItemIds: safeArray(payload?.world?.rewardItemIds, 24).map((item) => cleanText(item, 60)).filter(Boolean),
+      flagIds: safeArray(payload?.world?.flagIds, 24).map((item) => cleanText(item, 60)).filter(Boolean),
+    } : null,
   };
 }
 
@@ -262,7 +444,7 @@ function createSummaryPrompt(payload) {
   };
 }
 
-function normalizeOutput(schema, value, rawContent) {
+function normalizeOutput(schema, value, rawContent, worldLimits = null) {
   const object = value && typeof value === "object" ? value : {};
   const rawLooksStructured = /["']?(?:narrative|note|memory|reply|response|summary|affectionDelta)["']?\s*:/.test(rawContent ?? "");
   const plainText = rawLooksStructured ? "" : rawContent;
@@ -277,7 +459,37 @@ function normalizeOutput(schema, value, rawContent) {
       || "这次行动改变了眼前局势，后续影响仍需继续观察。";
     const memory = cleanText(object.memory ?? object.memorySummary, 120)
       || "伙伴记住了玩家这次主动改变局势的选择。";
-    return { narrative, note, memory };
+    const directive = object.worldDirective && typeof object.worldDirective === "object"
+      ? object.worldDirective
+      : null;
+    const eventTitle = cleanText(directive?.eventTitle, 80);
+    const summary = cleanText(directive?.summary, 220);
+    const eventTypes = new Set(["探索", "关系", "势力", "战斗", "交易", "奇遇"]);
+    const rawQuest = directive?.quest && typeof directive.quest === "object" ? directive.quest : null;
+    const questTitle = cleanText(rawQuest?.title, 80);
+    const questObjective = cleanText(rawQuest?.objective, 160);
+    const allow = (values, value) => values?.includes(value) ? value : undefined;
+    const worldDirective = eventTitle && summary ? {
+      eventTitle,
+      eventType: eventTypes.has(directive?.eventType) ? directive.eventType : "奇遇",
+      summary,
+      factionId: allow(worldLimits?.factionIds, cleanText(directive?.factionId, 60)),
+      reputationDelta: clampInteger(directive?.reputationDelta, -4, 6, 0),
+      coinDelta: clampInteger(directive?.coinDelta, -10, 30, 0),
+      experienceDelta: clampInteger(directive?.experienceDelta, 0, 240, 0),
+      locationId: allow(worldLimits?.locationIds, cleanText(directive?.locationId, 60)),
+      addFlag: allow(worldLimits?.flagIds, cleanText(directive?.addFlag, 60)),
+      rewardItemId: allow(worldLimits?.rewardItemIds, cleanText(directive?.rewardItemId, 60)),
+      quest: questTitle && questObjective ? {
+        id: cleanText(rawQuest?.id, 80) || undefined,
+        title: questTitle,
+        objective: questObjective,
+        source: cleanText(rawQuest?.source, 60) || eventTitle,
+        target: clampInteger(rawQuest?.target, 1, 10, 1),
+        rewardText: cleanText(rawQuest?.rewardText, 100),
+      } : undefined,
+    } : undefined;
+    return { narrative, note, memory, worldDirective };
   }
   const reply = cleanText(object.reply ?? object.response ?? object.dialogue ?? object.content ?? plainText, 160);
   if (!reply) return null;
@@ -297,7 +509,7 @@ async function callProvider(config, prompt, fetchImpl) {
     ? { temperature: 0.55, maxTokens: 360 }
     : prompt.schema === "summary"
       ? { temperature: 0.25, maxTokens: 520 }
-      : { temperature: 0.65, maxTokens: 480 };
+      : { temperature: 0.65, maxTokens: prompt.worldMode ? 560 : 480 };
   const basePayload = {
     model: config.model,
     messages: [
@@ -341,7 +553,7 @@ async function callProvider(config, prompt, fetchImpl) {
         throw error;
       }
       const content = getMessageContent(result);
-      const normalized = normalizeOutput(prompt.schema, parseModelJson(content), content);
+      const normalized = normalizeOutput(prompt.schema, parseModelJson(content), content, prompt.worldLimits);
       if (!normalized) {
         if (body.response_format) continue;
         const error = new Error("AI_OUTPUT_INVALID");
@@ -383,24 +595,35 @@ export async function handleAiRequest(request, env, fetchImpl = fetch) {
       limits: {
         requestsPerMinute: config.requestsPerMinute,
         dailyRequests: config.dailyRequestLimit,
+        storage: hasPersistentBudgetStore(env) ? "d1" : "memory",
+        persistent: hasPersistentBudgetStore(env),
+        fallback: "memory",
       },
     });
   }
 
-  if (url.pathname !== AI_GENERATE_PATH) return jsonResponse({ error: "接口不存在" }, 404);
-  if (request.method !== "POST") return jsonResponse({ error: "仅支持 POST 请求" }, 405);
+  if (url.pathname !== AI_GENERATE_PATH) {
+    return errorResponse("AI_ROUTE_NOT_FOUND", "接口不存在", 404);
+  }
+  if (request.method !== "POST") {
+    return errorResponse("AI_METHOD_NOT_ALLOWED", "仅支持 POST 请求", 405, { allow: "POST" });
+  }
   if (config.providers.length === 0) {
-    return jsonResponse({ error: "AI 服务尚未配置", code: "AI_NOT_CONFIGURED" }, 503);
+    return errorResponse("AI_NOT_CONFIGURED", "AI 服务尚未配置", 503);
   }
 
-  const budget = checkRequestBudget(request, config);
-  if (!budget.allowed) return jsonResponse({ error: budget.message, code: budget.code }, 429);
+  const budget = await checkRequestBudget(request, env, config);
+  if (!budget.allowed) {
+    return errorResponse(budget.code, budget.message, 429, {
+      retryAfterSeconds: budget.retryAfterSeconds,
+    });
+  }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return jsonResponse({ error: "请求内容不是合法 JSON" }, 400);
+    return errorResponse("AI_INVALID_JSON", "请求内容不是合法 JSON", 400);
   }
 
   const prompt = body?.kind === "action"
@@ -410,7 +633,7 @@ export async function handleAiRequest(request, env, fetchImpl = fetch) {
       : body?.kind === "summary"
         ? createSummaryPrompt(body.payload)
       : null;
-  if (!prompt) return jsonResponse({ error: "请求类型或内容无效" }, 400);
+  if (!prompt) return errorResponse("AI_INVALID_REQUEST", "请求类型或内容无效", 400);
 
   try {
     let lastError;
@@ -425,12 +648,12 @@ export async function handleAiRequest(request, env, fetchImpl = fetch) {
     throw lastError;
   } catch (error) {
     if (error?.name === "AbortError") {
-      return jsonResponse({ error: "AI 服务响应超时", code: "AI_TIMEOUT" }, 504);
+      return errorResponse("AI_TIMEOUT", "AI 服务响应超时", 504);
     }
     if (error?.message === "AI_OUTPUT_INVALID") {
-      return jsonResponse({ error: "AI 返回格式不完整", code: "AI_OUTPUT_INVALID" }, 502);
+      return errorResponse("AI_OUTPUT_INVALID", "AI 返回格式不完整", 502);
     }
     const status = error?.status === 401 || error?.status === 403 ? 502 : 502;
-    return jsonResponse({ error: "AI 服务暂时不可用", code: "AI_PROVIDER_ERROR" }, status);
+    return errorResponse("AI_PROVIDER_ERROR", "AI 服务暂时不可用", status);
   }
 }

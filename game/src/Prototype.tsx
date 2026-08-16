@@ -37,12 +37,41 @@ import {
 } from "./story";
 import { useDynamicGameMusic } from "./audio/useDynamicGameMusic";
 import { publicAssetUrl } from "./publicAsset";
+import {
+  EXTENDED_CHARACTERS,
+  FACTIONS,
+  MARTIAL_SOULS,
+  RANDOM_SIDE_EVENTS,
+  createWorldProgress,
+  findMartialSoulByLegacyName,
+  getAvailableEventChoices,
+  getEligibleRandomEvents,
+  getMartialSoul,
+  getReputationTier,
+  getUnlockedExtendedCharacters,
+  type FactionId,
+  type MartialSoulId,
+  type RandomEventChoice,
+  type RandomSideEventDefinition,
+  type WorldLocationId,
+} from "./content/douluoWorldContent";
+import { EXPANDED_ITEMS } from "./gameplay/catalog";
+import { performBattleTurn, startBattle } from "./gameplay/battle";
+import type { BattleState, CombatEffectDefinition } from "./gameplay/types";
+import {
+  applyWorldDirective,
+  createInitialWorldDirectorState,
+  hydrateWorldDirectorState,
+  normalizeWorldDirective,
+  type WorldDirectorState,
+  type WorldDirective,
+} from "./world-director";
 
 type TabId = "story" | "world" | "relations" | "bag" | "archive";
 type Stage = "welcome" | "creation" | "game";
-type BagMode = "inventory" | "shop";
+type BagMode = "inventory" | "shop" | "auction";
 type SoulAttribute = "植物" | "水" | "火" | "兽" | "无";
-type EquipmentSlot = "护具" | "饰品";
+type EquipmentSlot = "护具" | "饰品" | "武器" | "头部魂骨" | "躯干魂骨" | "左臂魂骨" | "右臂魂骨" | "左腿魂骨" | "右腿魂骨" | "外附魂骨";
 type CombatStatus = "active" | "won" | "lost";
 type CombatAction = "basic" | "skill" | "secondSkill";
 type LocationId = "notting-city" | "shrek-academy" | "star-forest" | "sea-god-island";
@@ -116,12 +145,13 @@ type CharacterStats = {
 
 type ItemEffect =
   | { kind: "heal"; amount: number }
-  | { kind: "experience"; amount: number };
+  | { kind: "experience"; amount: number }
+  | { kind: "energy"; amount: number };
 
 type ItemDefinition = {
   id: string;
   name: string;
-  category: "关键物品" | "消耗品" | "装备" | "普通物品";
+  category: "关键物品" | "消耗品" | "装备" | "普通物品" | "魂骨";
   description: string;
   buyPrice: number | null;
   sellPrice: number | null;
@@ -160,11 +190,12 @@ type GameState = {
   narrative: string;
   note: string;
   martialSoul: string;
+  martialSoulId: MartialSoulId;
   martialAttribute: SoulAttribute;
   currentHp: number;
   victories: number;
   inventory: Record<string, number>;
-  equipment: Record<EquipmentSlot, string | null>;
+  equipment: Partial<Record<EquipmentSlot, string | null>>;
   soulRings: SoulRing[];
   currentStoryNodeId: string;
   storyFlags: string[];
@@ -176,6 +207,13 @@ type GameState = {
   storyNote: string;
   storySummary: string;
   storySummaryThroughTurn: number;
+  worldDirector: WorldDirectorState;
+  visitedWorldLocationIds: WorldLocationId[];
+  completedWorldEventIds: string[];
+  extendedRelationships: Record<string, number>;
+  auctionPurchases: string[];
+  boundItemIds: string[];
+  claimedRewardIds: string[];
 };
 
 type TimelineNode = {
@@ -227,6 +265,7 @@ type CombatState = {
   round: number;
   status: CombatStatus;
   log: string[];
+  engine?: BattleState;
 };
 
 type AchievementDefinition = {
@@ -266,6 +305,7 @@ function trimDialogueHistory(value: Partial<Record<CharacterId, DialogueMessage[
 }
 
 const ITEMS: Record<string, ItemDefinition> = {
+  ...EXPANDED_ITEMS,
   academy_letter: {
     id: "academy_letter",
     name: "学院推荐信",
@@ -386,9 +426,17 @@ const INVENTORY_ORDER = [
   "tournament_badge",
   "vast_sea_chart",
   "tide_armor",
+  "soul_energy_draught",
+  "wind_chaser_right_leg_bone",
+  "ironback_torso_bone",
 ];
 
 const SHOP_ITEM_IDS = ["healing_herb", "focus_incense", "blank_notebook", "apprentice_guard", "cloth_armor"];
+const AUCTION_LISTINGS = [
+  { itemId: "soul_energy_draught", price: 16, seller: "索托商会" },
+  { itemId: "wind_chaser_right_leg_bone", price: 88, seller: "匿名魂师" },
+  { itemId: "ironback_torso_bone", price: 96, seller: "大斗魂场寄售" },
+];
 
 const FIRST_SOUL_RING: SoulRing = {
   id: "blue-silver-centennial",
@@ -426,6 +474,8 @@ const SECOND_SOUL_RINGS: Record<string, SoulRing> = {
   },
 };
 
+const FACTION_IDS = FACTIONS.map((faction) => faction.id);
+
 const initialGame: GameState = {
   name: "唐三",
   identity: "原创角色",
@@ -448,6 +498,7 @@ const initialGame: GameState = {
     "你走在诺丁城的街道上，铁匠铺的敲击声隔着两条巷子传来。雨刚停，前方青石路上留着一串新鲜脚印，边缘浮着极淡的蓝光。那人走得很急，方向正是学院后门。",
   note: "发光的脚印不像普通行人留下的，附近似乎残留着植物系魂力。",
   martialSoul: "蓝银草",
+  martialSoulId: "blue-silver-grass",
   martialAttribute: "植物",
   currentHp: 152,
   victories: 0,
@@ -471,6 +522,13 @@ const initialGame: GameState = {
   storyNote: "脚印边缘残留着植物系魂力，这不是普通行人留下的痕迹。",
   storySummary: "",
   storySummaryThroughTurn: 0,
+  worldDirector: createInitialWorldDirectorState(FACTION_IDS),
+  visitedWorldLocationIds: ["notting-city"],
+  completedWorldEventIds: [],
+  extendedRelationships: Object.fromEntries(EXTENDED_CHARACTERS.map((character) => [character.id, 20])),
+  auctionPurchases: [],
+  boundItemIds: [],
+  claimedRewardIds: [],
 };
 
 const locations: WorldLocation[] = [
@@ -827,12 +885,13 @@ function getTalentBonus(talent: string) {
 
 function getStats(game: GameState): CharacterStats {
   const talent = getTalentBonus(game.talent);
+  const martialSoul = getMartialSoul(game.martialSoulId);
   const stats: CharacterStats = {
-    maxHp: 80 + game.soulPower * 6 + talent * 3,
-    attack: 16 + game.soulPower * 2 + talent,
-    defense: 8 + Math.floor(game.soulPower * 1.2) + talent,
-    speed: 10 + game.soulPower + talent,
-    control: 14 + Math.floor(game.soulPower * 1.5) + talent * 2,
+    maxHp: 80 + game.soulPower * 6 + talent * 3 + (martialSoul?.starterStats.maxHp ?? 0),
+    attack: 16 + game.soulPower * 2 + talent + (martialSoul?.starterStats.attack ?? 0),
+    defense: 8 + Math.floor(game.soulPower * 1.2) + talent + (martialSoul?.starterStats.defense ?? 0),
+    speed: 10 + game.soulPower + talent + (martialSoul?.starterStats.speed ?? 0),
+    control: 14 + Math.floor(game.soulPower * 1.5) + talent * 2 + (martialSoul?.starterStats.control ?? 0),
   };
 
   const additionalRings = Math.max(0, game.soulRings.length - 1);
@@ -854,6 +913,10 @@ function getStats(game: GameState): CharacterStats {
 }
 
 function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
+  const legacySoul = findMartialSoulByLegacyName(value?.martialSoul ?? "");
+  const martialSoulId = getMartialSoul(value?.martialSoulId ?? "blue-silver-grass")
+    ? (value?.martialSoulId ?? "blue-silver-grass")
+    : (legacySoul?.id ?? "blue-silver-grass");
   const hasStructuredStory =
     typeof value?.storyNarrative === "string" &&
     Array.isArray(value?.storyHistory) &&
@@ -861,6 +924,7 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
   const merged: GameState = {
     ...initialGame,
     ...value,
+    martialSoulId,
     inventory: { ...initialGame.inventory, ...(value?.inventory ?? {}) },
     equipment: { ...initialGame.equipment, ...(value?.equipment ?? {}) },
     relationships: { ...initialRelationships, ...(value?.relationships ?? {}) },
@@ -880,6 +944,15 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     storyNote: hasStructuredStory ? (value?.storyNote ?? initialGame.storyNote) : initialGame.storyNote,
     storySummary: typeof value?.storySummary === "string" ? value.storySummary.slice(0, 600) : "",
     storySummaryThroughTurn: Math.max(0, Math.min(value?.turns ?? 0, value?.storySummaryThroughTurn ?? 0)),
+    worldDirector: hydrateWorldDirectorState(value?.worldDirector, FACTION_IDS),
+    visitedWorldLocationIds: Array.isArray(value?.visitedWorldLocationIds) && value.visitedWorldLocationIds.length > 0
+      ? value.visitedWorldLocationIds
+      : ["notting-city"],
+    completedWorldEventIds: Array.isArray(value?.completedWorldEventIds) ? value.completedWorldEventIds : [],
+    extendedRelationships: { ...initialGame.extendedRelationships, ...(value?.extendedRelationships ?? {}) },
+    auctionPurchases: Array.isArray(value?.auctionPurchases) ? value.auctionPurchases : [],
+    boundItemIds: Array.isArray(value?.boundItemIds) ? value.boundItemIds : [],
+    claimedRewardIds: Array.isArray(value?.claimedRewardIds) ? value.claimedRewardIds : [],
   };
   const maxHp = getStats(merged).maxHp;
   return { ...merged, currentHp: Math.max(1, Math.min(merged.currentHp || maxHp, maxHp)) };
@@ -1093,6 +1166,53 @@ function getTravelStoryNode(locationId: LocationId) {
   return "notting_street";
 }
 
+function getCurrentWorldLocationId(game: GameState): WorldLocationId {
+  const direct = game.visitedWorldLocationIds.at(-1);
+  if (direct) return direct;
+  if (game.location.includes("史莱克")) return "shrek-academy";
+  if (game.location.includes("星斗")) return "star-forest";
+  if (game.location.includes("海神")) return "sea-god-island";
+  return "notting-city";
+}
+
+function getContentProgress(game: GameState) {
+  return createWorldProgress({
+    soulPower: game.soulPower,
+    coins: game.coins,
+    victories: game.victories,
+    martialSoulId: game.martialSoulId,
+    storyFlags: game.storyFlags,
+    completedEventIds: game.completedWorldEventIds,
+    visitedLocationIds: game.visitedWorldLocationIds,
+    reputation: game.worldDirector.factionReputation,
+    relationships: { ...game.relationships, ...game.extendedRelationships },
+  });
+}
+
+function localDirectiveFromEvent(event: RandomSideEventDefinition, choice: RandomEventChoice): WorldDirective {
+  const reputationEntry = Object.entries(choice.rewards.reputation ?? {})[0];
+  return {
+    eventTitle: event.title,
+    eventType: event.category === "人物" ? "关系" : event.category === "魂兽" ? "奇遇" : event.category,
+    summary: choice.outcome,
+    factionId: reputationEntry?.[0],
+    reputationDelta: reputationEntry?.[1] ?? 0,
+    coinDelta: choice.rewards.coins ?? 0,
+    experienceDelta: choice.rewards.experience ?? 0,
+    addFlag: choice.rewards.storyFlags?.[0],
+    rewardItemId: choice.rewards.itemIds?.[0],
+  };
+}
+
+function getStarterCombatEffects(status: string | undefined): CombatEffectDefinition[] {
+  if (status === "缠绕") return [{ kind: "眩晕", target: "enemy", chance: 0.58, duration: 1, potency: 0 }];
+  if (status === "破甲") return [{ kind: "虚弱", target: "enemy", chance: 0.72, duration: 2, potency: 4 }];
+  if (status === "灼烧") return [{ kind: "灼烧", target: "enemy", chance: 0.72, duration: 2, potency: 7 }];
+  if (status === "护盾" || status === "嘲讽") return [{ kind: "护盾", target: "self", chance: 1, duration: 2, potency: 6 }];
+  if (status === "加速") return [{ kind: "迟缓", target: "enemy", chance: 0.65, duration: 2, potency: 5 }];
+  return [];
+}
+
 function createLocalStorySummary(previousSummary: string, events: TimelineNode[]) {
   const recent = events
     .map((event) => `第${event.turn}轮「${event.title}」：${event.summary}`)
@@ -1113,6 +1233,7 @@ export default function Prototype() {
   const [name, setName] = useState("");
   const [identity, setIdentity] = useState("原创角色");
   const [talent, setTalent] = useState("天才档");
+  const [selectedMartialSoulId, setSelectedMartialSoulId] = useState<MartialSoulId>("blue-silver-grass");
   const [customOpen, setCustomOpen] = useState(false);
   const [customAction, setCustomAction] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -1124,6 +1245,8 @@ export default function Prototype() {
   const [travelingTo, setTravelingTo] = useState<LocationId | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<CharacterId | null>(null);
   const [dialogueSending, setDialogueSending] = useState<CharacterId | null>(null);
+  const [selectedWorldEvent, setSelectedWorldEvent] = useState<RandomSideEventDefinition | null>(null);
+  const [worldThinking, setWorldThinking] = useState(false);
   const summaryAttemptKeyRef = useRef("");
   const game = session.game;
   const stats = useMemo(() => getStats(game), [game]);
@@ -1232,7 +1355,28 @@ export default function Prototype() {
   };
 
   const beginGame = () => {
-    const base = { ...initialGame, name: name.trim() || "无名", identity, talent };
+    const martialSoul = getMartialSoul(selectedMartialSoulId) ?? MARTIAL_SOULS[0];
+    const firstRing: SoulRing = selectedMartialSoulId === "blue-silver-grass" ? FIRST_SOUL_RING : {
+      id: `${martialSoul.id}-centennial`,
+      name: `百年${martialSoul.name}魂环`,
+      age: 410,
+      attribute: martialSoul.attribute,
+      skillName: martialSoul.initialSkill.name,
+      skillDescription: martialSoul.initialSkill.description,
+    };
+    const base = {
+      ...initialGame,
+      name: name.trim() || "无名",
+      identity,
+      talent,
+      martialSoulId: martialSoul.id,
+      martialSoul: martialSoul.name,
+      martialAttribute: martialSoul.attribute,
+      soulRings: [firstRing],
+      narrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}`,
+      storyNarrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。命运的第一条线索，正指向诺丁城学院后门。`,
+      storyNote: `${martialSoul.identity} · 初始魂技：${martialSoul.initialSkill.name}`,
+    };
     const nextGame = { ...base, currentHp: getStats(base).maxHp };
     keyboard.hide();
     setSession(createSession(nextGame));
@@ -1304,6 +1448,7 @@ export default function Prototype() {
           identity: game.identity,
           talent: game.talent,
           soulPower: game.soulPower,
+          martialSoul: game.martialSoul,
         },
         scene: {
           chapter: node.chapter,
@@ -1417,6 +1562,9 @@ export default function Prototype() {
               storyNote: location.note,
               lastStoryChange: `旅行抵达 · ${location.name}`,
               turns: current.turns + 1,
+              visitedWorldLocationIds: current.visitedWorldLocationIds.includes(location.id as WorldLocationId)
+                ? current.visitedWorldLocationIds
+                : [...current.visitedWorldLocationIds, location.id as WorldLocationId],
             },
             20,
           ),
@@ -1575,16 +1723,172 @@ export default function Prototype() {
     window.setTimeout(resetPhoneViewport, 120);
   };
 
+  const discoverWorldEvent = () => {
+    const eligible = getEligibleRandomEvents(getCurrentWorldLocationId(game), getContentProgress(game));
+    if (eligible.length === 0) {
+      setToast("当前区域暂时没有新的支线，推进主线或前往其他地点后再来看看");
+      return;
+    }
+    const weighted = eligible.flatMap((event) => Array.from({ length: Math.max(1, event.weight) }, () => event));
+    setSelectedWorldEvent(weighted[game.worldDirector.explorationSeed % weighted.length]);
+  };
+
+  const resolveWorldEvent = async (event: RandomSideEventDefinition, choice: RandomEventChoice) => {
+    if (worldThinking) return;
+    setWorldThinking(true);
+    const localDirective = localDirectiveFromEvent(event, choice);
+    const allowedFlags = RANDOM_SIDE_EVENTS.flatMap((item) => item.choices.flatMap((itemChoice) => (
+      "storyFlags" in itemChoice.rewards ? itemChoice.rewards.storyFlags ?? [] : []
+    )));
+    let directive = localDirective;
+    let usedAi = false;
+    try {
+      const aiResult = await generateAiAction({
+        mode: "world",
+        action: choice.label,
+        player: {
+          name: game.name,
+          identity: game.identity,
+          talent: game.talent,
+          soulPower: game.soulPower,
+          martialSoul: game.martialSoul,
+        },
+        scene: {
+          chapter: "开放世界",
+          title: event.title,
+          location: game.location,
+          narrative: event.summary,
+          localOutcome: choice.outcome,
+        },
+        storySummary: game.storySummary,
+        flags: game.storyFlags,
+        world: {
+          day: game.worldDirector.day,
+          reputation: game.worldDirector.factionReputation,
+          factionIds: FACTION_IDS,
+          locationIds: game.visitedWorldLocationIds,
+          rewardItemIds: Object.keys(ITEMS),
+          flagIds: allowedFlags,
+          localEvent: { title: event.title, choice: choice.label, outcome: choice.outcome },
+        },
+      });
+      const normalized = normalizeWorldDirective(aiResult.worldDirective, {
+        factionIds: FACTION_IDS,
+        locationIds: game.visitedWorldLocationIds,
+        rewardItemIds: Object.keys(ITEMS),
+        flagIds: allowedFlags,
+      });
+      if (normalized) {
+        directive = normalized;
+        usedAi = true;
+      }
+    } catch {
+      usedAi = false;
+    }
+
+    commitGame(
+      (current) => {
+        const turn = current.turns + 1;
+        let next: GameState = {
+          ...current,
+          turns: turn,
+          coins: Math.max(0, current.coins + directive.coinDelta),
+          worldDirector: applyWorldDirective(current.worldDirector, directive, turn, usedAi ? "AI导演" : "本地事件"),
+          completedWorldEventIds: event.repeatable || current.completedWorldEventIds.includes(event.id)
+            ? current.completedWorldEventIds
+            : [...current.completedWorldEventIds, event.id],
+          extendedRelationships: { ...current.extendedRelationships },
+          storyFlags: directive.addFlag && !current.storyFlags.includes(directive.addFlag)
+            ? [...current.storyFlags, directive.addFlag]
+            : current.storyFlags,
+          narrative: directive.summary,
+          note: `${event.title} · ${choice.label}`,
+          storyNarrative: directive.summary,
+          storyNote: `${event.title} · ${choice.label}`,
+          lastStoryChange: `${usedAi ? "AI 世界导演" : "本地世界事件"} · ${event.title}`,
+        };
+        for (const [characterId, delta] of Object.entries(choice.rewards.relationships ?? {})) {
+          next.extendedRelationships[characterId] = Math.max(0, Math.min(100, (next.extendedRelationships[characterId] ?? 20) + delta));
+        }
+        if (directive.rewardItemId && ITEMS[directive.rewardItemId]) next = updateInventory(next, directive.rewardItemId, 1);
+        return gainSoulExperience(next, directive.experienceDelta);
+      },
+      { title: event.title, summary: directive.summary },
+    );
+    setSelectedWorldEvent(null);
+    setWorldThinking(false);
+    setToast(usedAi ? "AI 世界导演已生成并校验本次支线" : "已使用本地世界规则完成支线");
+  };
+
+  const buyAuctionItem = (itemId: string, price: number) => {
+    if (game.auctionPurchases.includes(itemId)) {
+      setToast("本轮拍卖已经买下该物品");
+      return;
+    }
+    if (game.coins < price) {
+      setToast("金魂币不足，无法一口价竞拍");
+      return;
+    }
+    const item = ITEMS[itemId];
+    if (!item) return;
+    commitGame(
+      (current) => updateInventory({
+        ...current,
+        turns: current.turns + 1,
+        coins: current.coins - price,
+        auctionPurchases: [...current.auctionPurchases, itemId],
+        narrative: `拍卖师落槌，你以 ${price} 金魂币获得了${item.name}。`,
+        note: item.category === "魂骨" ? "魂骨装备后会与魂师绑定，出售前请慎重考虑。" : "拍卖品已经收入行囊。",
+      }, itemId, 1),
+      { title: `拍得${item.name}`, summary: `支付 ${price} 金魂币完成竞拍。` },
+    );
+    setToast(`${item.name}已收入行囊`);
+  };
+
   const openCombat = () => {
     const enemy = ENEMIES[game.victories % ENEMIES.length];
+    const soul = getMartialSoul(game.martialSoulId) ?? MARTIAL_SOULS[0];
+    const playerActions = [
+      { id: "basic", name: "普通攻击", kind: "basic" as const, energyCost: 0, power: 0.88, attribute: "无" as const },
+      { id: "skill", name: game.soulRings[0].skillName, kind: "soulSkill" as const, energyCost: 2, power: 1.25, attribute: game.martialAttribute, effects: getStarterCombatEffects(soul.initialSkill.status) },
+      ...(game.soulRings[1] ? [{ id: "secondSkill", name: game.soulRings[1].skillName, kind: "soulSkill" as const, energyCost: 3, power: 1.62, attribute: game.martialAttribute, effects: [{ kind: "眩晕" as const, target: "enemy" as const, chance: 0.72, duration: 1, potency: 0 }] }] : []),
+    ];
+    const engine = startBattle({
+      id: `${enemy.id}:${game.turns}:${game.victories}`,
+      seed: game.worldDirector.explorationSeed + game.turns + 1,
+      player: {
+        id: "player",
+        name: game.name,
+        hp: Math.min(game.currentHp, stats.maxHp),
+        energy: 2,
+        maxEnergy: 4,
+        attribute: game.martialAttribute,
+        stats,
+        actions: playerActions,
+      },
+      enemy: {
+        id: enemy.id,
+        name: enemy.name,
+        maxEnergy: 4,
+        energy: 2,
+        attribute: enemy.attribute,
+        stats: { maxHp: enemy.maxHp, attack: enemy.attack, defense: enemy.defense, speed: enemy.speed, control: Math.max(8, enemy.speed - 2) },
+        actions: [
+          { id: "enemy-basic", name: "魂兽扑击", kind: "basic", energyCost: 0, power: 0.82, attribute: "无", aiWeight: 4 },
+          { id: "enemy-skill", name: "野性震荡", kind: "soulSkill", energyCost: 2, power: 1.08, attribute: enemy.attribute, effects: [{ kind: "迟缓", target: "enemy", chance: 0.35, duration: 1, potency: 3 }], aiWeight: 2 },
+        ],
+      },
+      reward: { id: `reward:${enemy.id}:${game.victories}`, coins: enemy.coinReward, soulExperience: enemy.expReward, items: { [enemy.lootId]: 1 } },
+    });
     setCombat({
       enemyId: enemy.id,
-      enemyHp: enemy.maxHp,
-      playerHp: Math.min(game.currentHp, stats.maxHp),
-      energy: 2,
-      round: 1,
-      status: "active",
+      enemyHp: engine.enemy.hp,
+      playerHp: engine.player.hp,
+      energy: engine.player.energy,
+      round: engine.round,
+      status: engine.status,
       log: [`${enemy.name}挡住了去路。你的${game.martialSoul}已经展开。`],
+      engine,
     });
     music.playEvent("boss_appears");
   };
@@ -1592,12 +1896,55 @@ export default function Prototype() {
   const performCombatAction = (action: CombatAction) => {
     if (!combat || combat.status !== "active") return;
     const enemy = ENEMIES.find((item) => item.id === combat.enemyId);
+    if (enemy && combat.engine) {
+      const result = performBattleTurn(combat.engine, action);
+      if (!result.ok) {
+        setToast(result.message);
+        return;
+      }
+      const engine = result.value;
+      const nextCombat: CombatState = {
+        ...combat,
+        enemyHp: engine.enemy.hp,
+        playerHp: engine.player.hp,
+        energy: engine.player.energy,
+        round: engine.round,
+        status: engine.status,
+        log: [...engine.events.slice(-6).reverse().map((event) => event.text), ...combat.log].slice(0, 10),
+        engine,
+      };
+      setCombat(nextCombat);
+      if (engine.status === "won") {
+        const willLevel = game.soulProgress + enemy.expReward >= soulExperienceRequired(game.soulPower);
+        commitGame(
+          (current) => gainSoulExperience(updateInventory({
+            ...current,
+            turns: current.turns + 1,
+            victories: current.victories + 1,
+            coins: current.coins + enemy.coinReward,
+            currentHp: Math.max(1, engine.player.hp),
+            narrative: `你在${current.location}击败了${enemy.name}。${game.soulRings[0].skillName}的实战运用更加成熟。`,
+            note: `持续状态与属性克制完成结算，获得${ITEMS[enemy.lootId].name}。`,
+          }, enemy.lootId, 1), enemy.expReward),
+          { title: `战胜${enemy.name}`, summary: `获得 ${enemy.expReward} 经验、${enemy.coinReward} 金魂币和${ITEMS[enemy.lootId].name}。` },
+        );
+        setToast(willLevel ? "战斗突破，魂力等级提升" : "战利品已放入行囊");
+        music.playEvent(willLevel ? "level_breakthrough" : "battle_victory");
+      } else if (engine.status === "lost") {
+        commitGame(
+          (current) => ({ ...current, turns: current.turns + 1, currentHp: 1, coins: Math.max(0, current.coins - 3), narrative: `你没能突破${enemy.name}的阻拦，只得带伤撤退。`, note: "战斗失败，损失 3 金魂币。" }),
+          { title: `败于${enemy.name}`, summary: "撤退并保留战斗经验。" },
+        );
+        setToast("战斗失败，已保留本次时间节点");
+      }
+      return;
+    }
     const secondRing = game.soulRings[1];
     const energyCost = action === "secondSkill" ? 3 : action === "skill" ? 2 : 0;
     if (!enemy || combat.energy < energyCost || (action === "secondSkill" && !secondRing)) return;
 
     const isSkill = action !== "basic";
-    const skillName = action === "secondSkill" ? secondRing.skillName : action === "skill" ? FIRST_SOUL_RING.skillName : "普通攻击";
+    const skillName = action === "secondSkill" ? secondRing.skillName : action === "skill" ? game.soulRings[0].skillName : "普通攻击";
     const attackAttribute: SoulAttribute = isSkill ? game.martialAttribute : "无";
     const multiplier = attributeMultiplier(attackAttribute, enemy.attribute);
     const power = action === "secondSkill" ? 1.62 : action === "skill" ? 1.25 : 0.88;
@@ -1643,7 +1990,7 @@ export default function Prototype() {
         enemyHp,
         energy,
         round: combat.round + 1,
-        log: [`蓝银草锁住了${enemy.name}，对方本轮无法反击。`, ...nextLog],
+        log: [`${game.martialSoul}控制住了${enemy.name}，对方本轮无法反击。`, ...nextLog],
       });
       return;
     }
@@ -1687,6 +2034,10 @@ export default function Prototype() {
       setToast("当前生命已满，无需使用");
       return;
     }
+    if (item.effect.kind === "energy" && (!combat || combat.status !== "active")) {
+      setToast("回魂露需要在战斗中使用");
+      return;
+    }
     const willLevel = item.effect.kind === "experience" && game.soulProgress + item.effect.amount >= soulExperienceRequired(game.soulPower);
     commitGame(
       (current) => {
@@ -1700,6 +2051,9 @@ export default function Prototype() {
       },
       { title: `使用${item.name}`, summary: item.description },
     );
+    if (item.effect.kind === "energy" && combat) {
+      setCombat({ ...combat, energy: Math.min(4, combat.energy + item.effect.amount) });
+    }
     setSelectedItem(null);
     setToast(willLevel ? "魂力突破，等级提升" : `${item.name}已使用`);
   };
@@ -1718,7 +2072,7 @@ export default function Prototype() {
   const sellItem = (itemId: string) => {
     const item = ITEMS[itemId];
     const equipped = item.slot ? game.equipment[item.slot] === itemId : false;
-    if (item.sellPrice === null || (game.inventory[itemId] ?? 0) <= 0 || equipped) return;
+    if (item.sellPrice === null || (game.inventory[itemId] ?? 0) <= 0 || equipped || game.boundItemIds.includes(itemId)) return;
     commitGame(
       (current) => updateInventory({ ...current, coins: current.coins + (item.sellPrice ?? 0) }, itemId, -1),
       { title: `出售${item.name}`, summary: `获得 ${item.sellPrice} 金魂币。` },
@@ -1735,6 +2089,9 @@ export default function Prototype() {
       (current) => ({
         ...current,
         equipment: { ...current.equipment, [item.slot as EquipmentSlot]: isEquipped ? null : itemId },
+        boundItemIds: !isEquipped && item.category === "魂骨" && !current.boundItemIds.includes(itemId)
+          ? [...current.boundItemIds, itemId]
+          : current.boundItemIds,
       }),
       { title: `${isEquipped ? "卸下" : "装备"}${item.name}`, summary: isEquipped ? "装备加成已移除。" : item.description },
     );
@@ -1781,6 +2138,7 @@ export default function Prototype() {
     setName("");
     setIdentity("原创角色");
     setTalent("天才档");
+    setSelectedMartialSoulId("blue-silver-grass");
   };
 
   const selectedItemDefinition = selectedItem ? ITEMS[selectedItem.id] : null;
@@ -1798,9 +2156,11 @@ export default function Prototype() {
             name={name}
             identity={identity}
             talent={talent}
+            martialSoulId={selectedMartialSoulId}
             onNameChange={setName}
             onIdentityChange={setIdentity}
             onTalentChange={setTalent}
+            onMartialSoulChange={setSelectedMartialSoulId}
             onBegin={beginGame}
           />
         ) : (
@@ -1816,7 +2176,13 @@ export default function Prototype() {
               />
             ) : null}
             {activeTab === "world" ? (
-              <WorldScreen game={game} onBattle={openCombat} onSelectLocation={openLocation} />
+              <WorldScreen
+                game={game}
+                worldThinking={worldThinking}
+                onBattle={openCombat}
+                onSelectLocation={openLocation}
+                onExplore={discoverWorldEvent}
+              />
             ) : null}
             {activeTab === "relations" ? (
               <RelationsScreen game={game} stats={stats} onTrain={train} onSelectCharacter={openCharacter} />
@@ -1828,6 +2194,7 @@ export default function Prototype() {
                 mode={bagMode}
                 onModeChange={setBagMode}
                 onSelectItem={(id, source) => setSelectedItem({ id, source })}
+                onBuyAuction={buyAuctionItem}
               />
             ) : null}
             {activeTab === "archive" ? (
@@ -1875,6 +2242,25 @@ export default function Prototype() {
           {toast}
         </div>
       ) : null}
+
+      <BottomSheet
+        open={Boolean(selectedWorldEvent)}
+        onOpenChange={(open) => {
+          if (!open && !worldThinking) setSelectedWorldEvent(null);
+        }}
+        title={selectedWorldEvent?.title ?? "世界支线"}
+        description={selectedWorldEvent ? `${selectedWorldEvent.category} · ${game.location}` : undefined}
+        snap={0.66}
+      >
+        {selectedWorldEvent ? (
+          <WorldEventSheet
+            event={selectedWorldEvent}
+            choices={getAvailableEventChoices(selectedWorldEvent, getContentProgress(game))}
+            thinking={worldThinking}
+            onChoose={(choice) => resolveWorldEvent(selectedWorldEvent, choice)}
+          />
+        ) : null}
+      </BottomSheet>
 
       <BottomSheet
         open={customOpen}
@@ -2018,9 +2404,11 @@ type CreationProps = {
   name: string;
   identity: string;
   talent: string;
+  martialSoulId: MartialSoulId;
   onNameChange: (value: string) => void;
   onIdentityChange: (value: string) => void;
   onTalentChange: (value: string) => void;
+  onMartialSoulChange: (value: MartialSoulId) => void;
   onBegin: () => void;
 };
 
@@ -2073,6 +2461,22 @@ function CreationScreen(props: CreationProps) {
             onClick={() => props.onTalentChange(item)}
           >
             {item}
+          </button>
+        ))}
+      </fieldset>
+
+      <fieldset className="choice-fieldset martial-soul-grid">
+        <legend>初始武魂</legend>
+        {MARTIAL_SOULS.map((soul) => (
+          <button
+            className={props.martialSoulId === soul.id ? "martial-soul-card selected" : "martial-soul-card"}
+            key={soul.id}
+            type="button"
+            onClick={() => props.onMartialSoulChange(soul.id)}
+          >
+            <span className={`martial-soul-glyph ${soul.attribute}`}>{soul.name.slice(0, 1)}</span>
+            <span><strong>{soul.name}</strong><small>{soul.quality} · {soul.role}</small></span>
+            <em>{soul.initialSkill.name}</em>
           </button>
         ))}
       </fieldset>
@@ -2178,16 +2582,23 @@ function StoryScreen({
 
 function WorldScreen({
   game,
+  worldThinking,
   onBattle,
   onSelectLocation,
+  onExplore,
 }: {
   game: GameState;
+  worldThinking: boolean;
   onBattle: () => void;
   onSelectLocation: (locationId: LocationId) => void;
+  onExplore: () => void;
 }) {
   const enemy = ENEMIES[game.victories % ENEMIES.length];
   const currentLocation = getLocationByName(game.location);
   const storyNode = getStoryNode(game);
+  const progress = getContentProgress(game);
+  const unlockedCharacters = getUnlockedExtendedCharacters(progress);
+  const recentWorldEvent = game.worldDirector.eventHistory.at(-1);
   return (
     <section className="world-screen">
       <header className="page-title"><span>世界</span><GlobeIcon /></header>
@@ -2210,6 +2621,27 @@ function WorldScreen({
           );
         })}
       </div>
+      <article className="world-director-card">
+        <header><span><MagicWandIcon /> 世界导演</span><strong>第 {game.worldDirector.day} 日</strong></header>
+        <h2>{recentWorldEvent?.title ?? "大陆正在等待你的下一次探索"}</h2>
+        <p>{recentWorldEvent?.summary ?? "随机支线会结合当前位置、武魂、关系与势力声望出现；AI 只在安全规则内改变世界。"}</p>
+        <button type="button" onClick={onExplore} disabled={worldThinking}>
+          {worldThinking ? "世界正在回应……" : "探索当前区域"}<ChevronRightIcon />
+        </button>
+      </article>
+      <section className="faction-panel" aria-label="大陆势力声望">
+        <header><span>势力声望</span><small>共 {FACTIONS.length} 个势力</small></header>
+        <div>
+          {FACTIONS.slice(0, 4).map((faction) => {
+            const score = game.worldDirector.factionReputation[faction.id] ?? 0;
+            return <article key={faction.id}><span>{faction.name}</span><strong>{score}</strong><small>{getReputationTier(faction.id, score).name}</small></article>;
+          })}
+        </div>
+      </section>
+      <section className="world-contacts-panel">
+        <header><span>可结识角色</span><small>{unlockedCharacters.length} / {EXTENDED_CHARACTERS.length}</small></header>
+        <div>{unlockedCharacters.slice(0, 5).map((character) => <span key={character.id}>{character.name}<small>{character.role}</small></span>)}</div>
+      </section>
       <article className="quest-card story-quest-card">
         <span className="quest-icon"><ReaderIcon /></span>
         <div><small>{storyNode.chapter}</small><h2>{storyNode.title}</h2><p>{storyNode.quest}</p></div>
@@ -2233,6 +2665,33 @@ function WorldScreen({
   );
 }
 
+function WorldEventSheet({
+  event,
+  choices,
+  thinking,
+  onChoose,
+}: {
+  event: RandomSideEventDefinition;
+  choices: readonly RandomEventChoice[];
+  thinking: boolean;
+  onChoose: (choice: RandomEventChoice) => void;
+}) {
+  return (
+    <div className="world-event-sheet">
+      <p>{event.summary}</p>
+      <div>
+        {choices.map((choice) => (
+          <button key={choice.id} type="button" onClick={() => onChoose(choice)} disabled={thinking}>
+            <span><strong>{choice.label}</strong><small>{choice.outcome}</small></span>
+            <ChevronRightIcon />
+          </button>
+        ))}
+      </div>
+      <small className="world-rule-note">结果先经过本地斗罗规则校验；AI 不可直接修改等级、稀有物品或跳过主线。</small>
+    </div>
+  );
+}
+
 function RelationsScreen({
   game,
   stats,
@@ -2248,7 +2707,11 @@ function RelationsScreen({
   return (
     <section className="relations-screen">
       <header className="profile-header">
-        <div className="spirit-mark"><img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂徽记" /></div>
+        <div className="spirit-mark">
+          {game.martialSoulId === "blue-silver-grass"
+            ? <img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂徽记" />
+            : <span className={`martial-soul-glyph ${game.martialAttribute}`}>{game.martialSoul.slice(0, 1)}</span>}
+        </div>
         <div><h1>{game.name}</h1><p>魂力 <strong>{game.soulPower}级</strong></p><p>武魂 <strong>{game.martialSoul} · {game.martialAttribute}</strong></p></div>
       </header>
       <div className="soul-meter compact-soul-meter">
@@ -2471,15 +2934,17 @@ function BagScreen({
   mode,
   onModeChange,
   onSelectItem,
+  onBuyAuction,
 }: {
   game: GameState;
   stats: CharacterStats;
   mode: BagMode;
   onModeChange: (mode: BagMode) => void;
   onSelectItem: (id: string, source: BagMode) => void;
+  onBuyAuction: (itemId: string, price: number) => void;
 }) {
   const inventoryIds = INVENTORY_ORDER.filter((id) => (game.inventory[id] ?? 0) > 0);
-  const itemIds = mode === "inventory" ? inventoryIds : SHOP_ITEM_IDS;
+  const itemIds = mode === "inventory" ? inventoryIds : mode === "shop" ? SHOP_ITEM_IDS : [];
   return (
     <section className="bag-screen">
       <header className="page-title"><span>行囊与经济</span><BackpackIcon /></header>
@@ -2492,9 +2957,10 @@ function BagScreen({
       <div className="bag-segmented" aria-label="行囊视图">
         <button className={mode === "inventory" ? "active" : ""} type="button" onClick={() => onModeChange("inventory")}>我的行囊</button>
         <button className={mode === "shop" ? "active" : ""} type="button" onClick={() => onModeChange("shop")}>诺丁商店</button>
+        <button className={mode === "auction" ? "active" : ""} type="button" onClick={() => onModeChange("auction")}>魂师拍卖</button>
       </div>
       <div className="economy-summary">
-        <span>{mode === "inventory" ? `共 ${inventoryIds.length} 种物品` : "价格使用金魂币结算"}</span>
+        <span>{mode === "inventory" ? `共 ${inventoryIds.length} 种物品` : mode === "shop" ? "价格使用金魂币结算" : "一口价拍卖 · 每件限购一次"}</span>
         <strong>{game.coins} 金魂币</strong>
       </div>
       <div className="inventory-list interactive-inventory">
@@ -2512,6 +2978,23 @@ function BagScreen({
           );
         })}
       </div>
+      {mode === "auction" ? (
+        <div className="auction-list">
+          {AUCTION_LISTINGS.map((listing) => {
+            const item = ITEMS[listing.itemId];
+            const sold = game.auctionPurchases.includes(listing.itemId);
+            return (
+              <article key={listing.itemId}>
+                <span className="item-icon"><ArchiveIcon /></span>
+                <div><strong>{item.name}</strong><small>{listing.seller} · {item.category}</small><p>{item.description}</p></div>
+                <button type="button" onClick={() => onBuyAuction(listing.itemId, listing.price)} disabled={sold || game.coins < listing.price}>
+                  {sold ? "已拍得" : `${listing.price} 金`}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
       {mode === "inventory" && itemIds.length === 0 ? <p className="empty-state">行囊空空如也，可以前往诺丁商店补给。</p> : null}
     </section>
   );
@@ -2588,7 +3071,11 @@ function CombatSheet({
     <div className="combat-sheet">
       <div className="combat-opponents">
         <article>
-          <span className="combat-avatar player"><img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂" /></span>
+          <span className="combat-avatar player">
+            {game.martialSoulId === "blue-silver-grass"
+              ? <img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂" />
+              : <span className={`martial-soul-glyph ${game.martialAttribute}`}>{game.martialSoul.slice(0, 1)}</span>}
+          </span>
           <small>{game.name}</small><strong>{game.soulPower}级 · {game.martialAttribute}</strong>
           <div className="health-track" role="progressbar" aria-label="玩家生命" aria-valuemin={0} aria-valuemax={stats.maxHp} aria-valuenow={combat.playerHp}>
             <i style={{ width: `${(combat.playerHp / stats.maxHp) * 100}%` }} />
@@ -2609,6 +3096,12 @@ function CombatSheet({
         {game.martialAttribute} 对 {enemy.attribute}：<strong>{counter}</strong>
       </div>
       <div className="soul-energy-row"><span>可用魂力</span><strong>{"●".repeat(combat.energy)}{"○".repeat(4 - combat.energy)}</strong><span>第 {combat.round} 回合</span></div>
+      {combat.engine && (combat.engine.player.statuses.length > 0 || combat.engine.enemy.statuses.length > 0) ? (
+        <div className="combat-status-row">
+          {combat.engine.player.statuses.map((status) => <span key={`player-${status.id}`}>自身 · {status.kind} {status.remainingTurns}回合</span>)}
+          {combat.engine.enemy.statuses.map((status) => <span key={`enemy-${status.id}`}>敌方 · {status.kind} {status.remainingTurns}回合</span>)}
+        </div>
+      ) : null}
       <div className="combat-log" aria-live="polite">
         {combat.log.slice(0, 4).map((line, index) => <p key={`${combat.round}-${index}-${line}`}>{line}</p>)}
       </div>
@@ -2618,7 +3111,7 @@ function CombatSheet({
             <span>普通攻击</span><small>恢复 1 点魂力 · 中性伤害</small>
           </button>
           <button type="button" onClick={() => onAction("skill")} disabled={combat.energy < 2}>
-            <span>第一魂技 · {FIRST_SOUL_RING.skillName}</span><small>消耗 2 点魂力 · 植物伤害</small>
+            <span>第一魂技 · {game.soulRings[0].skillName}</span><small>消耗 2 点魂力 · {game.martialAttribute}伤害</small>
           </button>
           {game.soulRings[1] ? (
             <button className="second-soul-skill" type="button" onClick={() => onAction("secondSkill")} disabled={combat.energy < 3}>

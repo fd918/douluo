@@ -1560,6 +1560,59 @@ textarea:focus-visible {
 .ending-collection span { padding: 7px 5px; border: 1px dashed rgba(147, 163, 183, 0.22); border-radius: 7px; color: #657387; font-size: 9px; }
 .ending-collection span.found { border-style: solid; border-color: rgba(88, 216, 239, 0.32); color: #8fe0e9; background: rgba(88, 216, 239, 0.06); }
 
+.martial-soul-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.martial-soul-grid legend { grid-column: 1 / -1; }
+.martial-soul-card { display: grid; grid-template-columns: 38px 1fr; gap: 8px; align-items: center; min-height: 72px; padding: 9px; border: 1px solid rgba(115, 143, 173, 0.28); border-radius: 11px; color: #aebaca; text-align: left; background: #091727; }
+.martial-soul-card.selected { border-color: rgba(230, 189, 104, 0.7); color: #f0d89e; background: linear-gradient(145deg, #17223a, #0b1a2b); box-shadow: inset 0 0 18px rgba(230, 189, 104, 0.08); }
+.martial-soul-card strong, .martial-soul-card small { display: block; }
+.martial-soul-card strong { font-size: 12px; }
+.martial-soul-card small { margin-top: 3px; color: #7f91a5; font-size: 9px; }
+.martial-soul-card em { grid-column: 1 / -1; color: #6ed7e7; font-size: 9px; font-style: normal; }
+.martial-soul-glyph { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid rgba(88, 216, 239, 0.45); border-radius: 50%; color: #8ce3ed; background: radial-gradient(circle, rgba(88, 216, 239, 0.2), rgba(8, 22, 38, 0.95)); font-family: "Noto Serif SC", serif; font-weight: 700; }
+.martial-soul-glyph.火 { border-color: rgba(235, 118, 82, 0.6); color: #ffb18e; background: radial-gradient(circle, rgba(235, 89, 52, 0.28), #24111a); }
+.martial-soul-glyph.植物 { border-color: rgba(94, 202, 150, 0.55); color: #88e5b4; }
+.martial-soul-glyph.兽 { border-color: rgba(230, 189, 104, 0.55); color: #efd492; }
+.martial-soul-glyph.无 { border-color: rgba(169, 133, 255, 0.55); color: #c9adff; }
+.spirit-mark .martial-soul-glyph, .combat-avatar .martial-soul-glyph { width: 100%; height: 100%; }
+
+.world-director-card, .faction-panel, .world-contacts-panel { margin-top: 12px; padding: 14px; border: 1px solid rgba(88, 216, 239, 0.25); border-radius: 12px; background: linear-gradient(145deg, rgba(12, 31, 51, 0.96), rgba(7, 19, 33, 0.96)); }
+.world-director-card header, .faction-panel > header, .world-contacts-panel > header { display: flex; align-items: center; justify-content: space-between; color: #75d9e8; font-size: 10px; }
+.world-director-card header span { display: flex; gap: 6px; align-items: center; }
+.world-director-card h2 { margin: 10px 0 5px; color: #f1d99c; font-family: "Noto Serif SC", serif; font-size: 16px; }
+.world-director-card p { margin: 0; color: #9cabbc; font-size: 10px; line-height: 1.65; }
+.world-director-card button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px; margin-top: 12px; padding: 0 12px; border: 1px solid rgba(230, 189, 104, 0.55); border-radius: 9px; color: #f0d38d; background: #162338; }
+.faction-panel > div { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.faction-panel article { display: grid; grid-template-columns: 1fr auto; gap: 3px 6px; padding: 8px; border-radius: 8px; background: rgba(2, 12, 23, 0.55); }
+.faction-panel article span { color: #aebccc; font-size: 9px; }
+.faction-panel article strong { color: #e7c978; font-size: 11px; }
+.faction-panel article small { grid-column: 1 / -1; color: #70849a; font-size: 8px; }
+.world-contacts-panel > div { display: flex; gap: 7px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
+.world-contacts-panel > div > span { flex: 0 0 auto; min-width: 76px; padding: 8px; border: 1px solid rgba(169, 133, 255, 0.22); border-radius: 8px; color: #d5c4f2; font-size: 10px; background: rgba(35, 24, 58, 0.35); }
+.world-contacts-panel > div small { display: block; margin-top: 3px; color: #887da0; font-size: 8px; }
+.world-event-sheet > p { margin: 0 0 12px; color: #b1becc; font-size: 12px; line-height: 1.7; }
+.world-event-sheet > div { display: grid; gap: 8px; }
+.world-event-sheet button { display: flex; align-items: center; justify-content: space-between; min-height: 62px; padding: 10px 12px; border: 1px solid rgba(230, 189, 104, 0.35); border-radius: 10px; color: #efd99f; text-align: left; background: #101d30; }
+.world-event-sheet button span { padding-right: 8px; }
+.world-event-sheet button strong, .world-event-sheet button small { display: block; }
+.world-event-sheet button small { margin-top: 4px; color: #8c9caf; font-size: 9px; line-height: 1.45; }
+.world-rule-note { display: block; margin-top: 12px; color: #697b8e; font-size: 9px; line-height: 1.55; }
+
+.bag-segmented { grid-template-columns: repeat(3, 1fr); }
+.auction-list { display: grid; gap: 9px; margin-top: 12px; }
+.auction-list article { display: grid; grid-template-columns: 38px 1fr auto; gap: 9px; align-items: center; padding: 11px; border: 1px solid rgba(230, 189, 104, 0.25); border-radius: 10px; background: #0a1728; }
+.auction-list strong, .auction-list small { display: block; }
+.auction-list strong { color: #eddaaa; font-size: 11px; }
+.auction-list small { margin-top: 3px; color: #7f90a4; font-size: 8px; }
+.auction-list p { margin: 5px 0 0; color: #697b8e; font-size: 8px; line-height: 1.4; }
+.auction-list button { min-width: 62px; min-height: 44px; border: 1px solid rgba(88, 216, 239, 0.35); border-radius: 8px; color: #83dfe9; background: #10243a; font-size: 9px; }
+.auction-list button:disabled { color: #596779; opacity: 0.65; }
+.combat-status-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.combat-status-row span { padding: 4px 7px; border: 1px solid rgba(169, 133, 255, 0.3); border-radius: 999px; color: #cbb5ed; background: rgba(81, 55, 116, 0.22); font-size: 8px; }
+
+@media (max-width: 360px) {
+  .martial-soul-grid { grid-template-columns: 1fr; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
