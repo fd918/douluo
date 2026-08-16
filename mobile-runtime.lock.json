@@ -1,6 +1,6 @@
 {
   "scripts/check-mobile-runtime.mjs": "ee85738cc2ef889c0b457d8ccac61e017b8c5d16f393e766ec9fb7d11c9aff7f",
-  "scripts/prepare-sites-build.mjs": "c8b5dea178295fd10fac7d5fe9e6647b94bbbae27740897b524a13c381cc3910",
+  "scripts/prepare-sites-build.mjs": "04c06e90f2262f82245cb1ef2d3c4ddb6b9c34e326471d8a1d4889da2190e378",
   "scripts/update-mobile-runtime-lock.mjs": "2708036ed45467e458fd1f32b466a81439fb36b58f39e0bb58a14c3df0845c10",
   "vite.config.ts": "7c3dda40646eab270db8a983a72704aa0e53d209d90b2c6b2b9695c506f14c5f",
   "src/App.tsx": "7054b4e14304ab33153d3a2e860aa43d2a4f69e8a69630b4a37a2cbcd4ad2f16",
@@ -28,5 +28,5 @@
   "public/assets/android/navigation-bar.svg": "077a782a3b6c2915fc518dfb4bba825c8c5861b2572f9522a7024902b9cb2850",
   "public/assets/status/status-icons.svg": "1a8bd4207cf34532ae514bdcdca693acc9a2b8ebc9d3182dc163c3e9ddcc4823",
   "public/assets/status/ios-status-icons.svg": "40e218b274d0973d519b50f42884e6e05ef0f2b6a0e46e102fda54218784466d",
-  "worker/index.js": "ec59fdd33e10a167937ae2e5f1a0a77475c1540d871f84894766ce62b2ef9e3d"
+  "worker/index.js": "830b86d5dc271699b500ceb66153c068edd5a964709d8739a1f83b45d2049100"
 }

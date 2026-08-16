@@ -1,4 +1,5 @@
 import { handleAiRequest } from "./ai-core.js";
+import { getCloudRuntime, handleOpsRequest } from "./ai-ops-cloud.js";
 
 const CORS_ORIGINS = new Set(["https://fd918.github.io"]);
 
@@ -16,11 +17,20 @@ function withCors(response, request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/ops/")) {
+      return handleOpsRequest(request, env);
+    }
     if (url.pathname.startsWith("/api/ai/")) {
       if (request.method === "OPTIONS") {
         return withCors(new Response(null, { status: 204 }), request);
       }
-      return withCors(await handleAiRequest(request, env), request);
+      let runtime = null;
+      try { runtime = await getCloudRuntime(env); } catch { runtime = null; }
+      return withCors(await handleAiRequest(request, env, fetch, runtime ? {
+        providers: runtime.providers,
+        settings: runtime.settings,
+        onAttempt: runtime.onAttempt,
+      } : undefined), request);
     }
 
     const response = await env.ASSETS.fetch(request);

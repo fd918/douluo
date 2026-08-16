@@ -2,7 +2,25 @@
 
 ## 当前状态
 
-服务端 AI 适配器已经接入。自由行动和人物自由对话会调用项目自己的 `/api/ai/generate`，由服务端再访问 AI 供应商；浏览器不会读取或收到真实密钥。主服务失败时自动尝试备用服务，两者都失败时自动使用本地剧情。
+服务端 AI 适配器已经接入。自由行动和人物自由对话会调用项目自己的 `/api/ai/generate`，由服务端再访问 AI 供应商；浏览器不会读取或收到真实密钥。公网服务商、默认模型、价格、主备顺序和限流策略由本机可视化中台管理并保存到 Sites D1；主服务失败时自动尝试备用服务，两者都失败时自动使用本地剧情。
+
+## 公网可视化中台
+
+在 Mac 本机启动中台：
+
+```bash
+cd "/Users/tanwenjie/Documents/ChatGPT/斗破/ai-ops-console"
+npm run dev
+```
+
+打开 `http://127.0.0.1:4180/`。进入“AI 服务商”即可新增服务商、同步或手动添加模型、选择默认模型，并填写输入/输出价格。价格单位为“人民币 / 100 万 Token”；设为 0 表示暂不计费。保存服务商、切换主服务或修改限流策略后会立即影响公网游戏，不需要重新部署。
+
+本机中台的公网地址与管理凭证集中保存在 `ai-ops-console/.env.local`：
+
+- `OPS_CLOUD_URL`：公网 AI Worker 地址
+- `OPS_CLOUD_ADMIN_TOKEN`：中台管理凭证
+
+以后迁移电脑时，只需要整体迁移这份本地配置；真实内容不得提交 Git、公开文档或截图。关闭本机只会让管理页面暂时打不开，公网 Worker 和 D1 会继续使用最后一次保存的配置。
 
 ## 本机填写位置
 
@@ -112,11 +130,13 @@ AI_REQUEST_TIMEOUT_MS=120000
 
 上线后不上传 `.env.local`。公网架构为 GitHub Pages 静态前端 `https://fd918.github.io/douluo/` + Sites Worker AI 服务端。真实密钥、模型和限流只存在 Sites 生产环境变量，前端仅保存公开的 AI 代理接口地址。
 
-更换公网版本的 AI 服务商时，在 Sites 项目的生产环境变量中整体替换 `AI_BASE_URL`、`AI_MODEL_ID`、`AI_API_KEY`，保存后重新部署 Worker。不需要改 GitHub Pages 代码或重新填入前端。
+首次部署时，Sites 环境变量中的 `AI_BASE_URL`、`AI_MODEL_ID`、`AI_API_KEY` 会作为初始服务自动导入公网 D1。完成导入后，更换服务商、模型和价格都在本机可视化中台操作，不需要重新部署 Worker，也不需要修改 GitHub Pages。
 
-首次启用持久化限流时，保持 `.openai/hosting.json` 的 `d1` 为 `"DB"`，并随 Sites 构建发布 `drizzle/0001_ai_request_budgets.sql`。部署平台会把逻辑名称 `DB` 注入 Worker；不需要把数据库账号、连接地址或密码写进代码。部署完成后用 `/api/ai/status` 验证 `limits.storage` 是否为 `d1`。
+公网中台另使用两项生产密钥：`AI_OPS_ADMIN_TOKEN` 保护管理接口，`AI_CONFIG_MASTER_KEY` 用于加密服务商密钥。两项都必须作为部署平台 Secret 保存，不得写入 `.env.example` 的真实值。修改 `AI_CONFIG_MASTER_KEY` 前必须先导出或重新录入服务商密钥，否则旧密文将无法解密。
 
-这是新增独立表，不修改玩家存档，也没有历史业务数据需要迁移或备份。迁移使用 `CREATE TABLE IF NOT EXISTS`，可重复执行。若需回退，先把 `.openai/hosting.json` 的 `d1` 改回 `null` 并重新部署，Worker 会自动改用内存限流；保留表不会影响游戏，确认无需审计旧计数后再由部署平台删除。验证回退时 `/api/ai/status` 应显示 `storage: "memory"`，且自由行动仍能正常调用 AI 或回退本地剧情。
+首次启用时，保持 `.openai/hosting.json` 的 `d1` 为 `"DB"`，并随 Sites 构建发布 `drizzle/0001_ai_request_budgets.sql` 与 `drizzle/0002_ai_ops_cloud.sql`。部署平台会把逻辑名称 `DB` 注入 Worker；不需要把数据库账号、连接地址或密码写进代码。部署完成后用 `/api/ai/status` 验证 `limits.storage` 是否为 `d1`。
+
+这是新增独立表，不修改玩家存档，也不删除 `ai_request_budgets` 历史计数。迁移使用 `CREATE TABLE IF NOT EXISTS`，可重复执行。回退时重新发布上一个 Sites 版本即可；保留新表不会影响旧 Worker，也不应主动删除，以便再次升级和保留审计数据。
 
 更换公网版本的服务商时，也只在部署平台修改前三项并重新部署，不修改或重新打包前端代码。GitHub Pages 只能托管静态文件，无法安全保存密钥或运行本项目的服务端接口；公网版本需要使用支持服务端函数或 Worker 和加密环境变量的平台。
 
