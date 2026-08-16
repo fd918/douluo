@@ -12,3 +12,7 @@ export const PROLOGUE_NARRATION = PROLOGUE_PARAGRAPHS.join("\n\n");
 export function buildOpeningNarration(martialSoul: Pick<MartialSoulDefinition, "name" | "description">) {
   return `六岁的春天，${martialSoul.name}将在觉醒法阵中第一次出现在你掌心。${martialSoul.description}同一天，圣魂村的唐三也会觉醒武魂。你们尚未相识，但已经站在同一条时代时间线上。`;
 }
+
+export function canonSceneNarrationClipId(nodeId: string) {
+  return `canon-scene-${nodeId}`;
+}

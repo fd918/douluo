@@ -104,9 +104,18 @@ async function main() {
   const prologue = narrationManifest.clips.find((clip) => clip.id === "prologue");
   assert(prologue?.role === "fate", "世界序章必须使用命运之声");
   assert(narrationRoles.story > narrationRoles.fate, "主旁白段落数量必须多于命运之声");
-  assert(narrationRoles.fate >= 16 && narrationRoles.fate <= 32, `命运之声数量应保持克制，实际为 ${narrationRoles.fate}`);
+  assert(narrationRoles.fate >= 24 && narrationRoles.fate <= 60, `命运之声数量应保持克制，实际为 ${narrationRoles.fate}`);
   assert(narrationIds.has("timeline-restart"), "旁白包缺少时间线重启内容");
-  assert(narrationIds.size === 96, `旁白总数应为 96，实际为 ${narrationIds.size}`);
+  const canonNarrationIds = [...narrationIds].filter((id) => id.startsWith("canon-scene-canon_"));
+  assert(canonNarrationIds.length >= 180, `原著同行固定旁白至少需要 180 段，实际为 ${canonNarrationIds.length}`);
+  for (const requiredId of [
+    "canon-scene-canon_awakening_morning",
+    "canon-scene-canon_ring_choice",
+    "canon-scene-canon_xiaowu_exposed",
+    "canon-scene-canon_final_war",
+    "canon-scene-canon_crossroads",
+  ]) assert(narrationIds.has(requiredId), `旁白包缺少关键原著同行场景：${requiredId}`);
+  assert(narrationIds.size >= 280, `旁白总数至少应为 280，实际为 ${narrationIds.size}`);
 
   console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效、${narrationRoles.story} 段云希主旁白、${narrationRoles.fate} 段云健命运之声。`);
 }

@@ -14,9 +14,12 @@ type CanonSceneSeed = {
   flags?: readonly [readonly string[], readonly string[], readonly string[]];
   milestoneFlags?: readonly string[];
   rewardItemId?: string;
+  dialogue?: readonly (readonly [string, string])[];
+  experienceBase?: number;
+  relationshipEffects?: readonly [number, number, number];
 };
 
-const seeds: CanonSceneSeed[] = [
+const coreSeeds: CanonSceneSeed[] = [
   {
     id: "canon_awakening_morning", chapter: "第一卷 · 武魂初醒", title: "六岁那年的清晨", anchor: "原著时期：圣魂村武魂觉醒日前后", location: "{{originPlace}}", season: "斗罗历二六三七年 · 初春清晨", quest: "在觉醒前确认自己想要怎样的人生",
     intro: "{{originPlace}}的春天比记忆里来得更冷。住处附近的铜钟敲过三遍，孩子们被家人领向临时搭起的武魂觉醒厅。你低头看着自己的掌心，那里还没有魂环，也没有足以决定命运的力量。远处，圣魂村的铁匠铺里，一名叫唐三的孩子也将在今天第一次看见自己的武魂。你们尚未相识，但同一条时代洪流已经开始转动。\n\n家人替你整理衣领，只问了一句：“不管觉醒出什么，你还愿意做你自己吗？”",
@@ -471,8 +474,105 @@ const keyDialogues: Record<string, readonly (readonly [string, string])[]> = {
   ],
 };
 
+type ChapterTexture = {
+  companions: readonly [string, string];
+  dailyDetail: string;
+  hiddenCost: string;
+  preparation: string;
+};
+
+const chapterTextures: Array<[string, ChapterTexture]> = [
+  ["第一卷", { companions: ["唐三", "小舞"], dailyDetail: "行李、学费、宿舍床位和第一次离家的不安，都需要孩子们自己处理", hiddenCost: "武魂觉醒带来的期待也会落到家庭和出身之上", preparation: "把下一段路需要的证明、衣物与最基础的魂力练习逐项准备好" }],
+  ["第二卷", { companions: ["小舞", "大师"], dailyDetail: "早课、工读、食堂排队、宿舍值日和晚间冥想占满了学院生活", hiddenCost: "疲惫、偏见与修炼停滞不会因为拥有魂力而消失", preparation: "在课程记录、训练计划和伙伴约定之间找出真正可坚持的节奏" }],
+  ["第三卷", { companions: ["唐三", "大师"], dailyDetail: "营火、守夜、辨认足迹、处理伤口和清点干粮构成猎魂真正的大部分时间", hiddenCost: "每一枚魂环背后都是风险、生命与不可撤回的选择", preparation: "检查撤退路线、魂力余量和队伍状态，不把下一次遭遇交给运气" }],
+  ["第四卷", { companions: ["小舞", "唐三"], dailyDetail: "六年的课程、兼职、考试、受伤与假期来信让成长有了具体重量", hiddenCost: "朋友会形成不同习惯，天赋差距也会在漫长时间里逐渐显现", preparation: "把阶段目标拆成每周能完成的小事，并为离开诺丁后的道路积累能力" }],
+  ["第五卷", { companions: ["戴沐白", "奥斯卡"], dailyDetail: "简陋宿舍、有限伙食、训练后的伤药和陌生同伴的生活习惯都需要重新适应", hiddenCost: "所谓怪物并不天然信任彼此，每个人都带着不愿立刻解释的过去", preparation: "提前说清定位、底线和求救信号，让下一场考核不靠临时热血" }],
+  ["第六卷", { companions: ["宁荣荣", "戴沐白"], dailyDetail: "登记、候场、复盘、治疗和领取微薄报酬才是斗魂生活反复出现的部分", hiddenCost: "观众只看见胜负，队员却必须承担伤势、失误与被研究的压力", preparation: "核对对手资料、站位变化和每个人当天的身体状态" }],
+  ["第七卷", { companions: ["小舞", "赵无极"], dailyDetail: "森林行进依赖轮流警戒、辨别气味、保存水源和不惊动无关魂兽", hiddenCost: "越接近强大魂兽，个人冲动越可能让整支队伍付出代价", preparation: "留下追踪标记、确定集合点，并让最坏情况下的撤退方案人人都懂" }],
+  ["第八卷", { companions: ["大师", "戴沐白"], dailyDetail: "负重、恢复、失败复盘与反复调整分组让团队一点点形成共同语言", hiddenCost: "固定称号和队伍位置既能带来归属，也可能让某些人被忽视", preparation: "重新确认轮换、补位和伤员退出后的替代方案" }],
+  ["第九卷", { companions: ["宁荣荣", "唐三"], dailyDetail: "赛程表、伤势报告、对手录像和城内舆论每天都在改变备战节奏", hiddenCost: "连续比赛会放大骄傲、疲劳和每一次没有说出口的分歧", preparation: "把情报转化为可执行的第一套与第二套战术，而不是背诵结果" }],
+  ["第十卷", { companions: ["小舞", "大师"], dailyDetail: "武魂城的巡逻、住宿检查、赛前封闭训练和领奖流程都带着主场压力", hiddenCost: "比赛之外的权力目光正在审视每个人的身份与价值", preparation: "保留撤退通道、联络方式和在赛场外保护伙伴的方案" }],
+  ["第十一卷", { companions: ["奥斯卡", "宁荣荣"], dailyDetail: "书信失联、独自赶路、陌生队伍和一次次失败让五年不再只是时间跳转", hiddenCost: "重逢不能自动修复错过的岁月，成长也可能带来新的距离", preparation: "把没有说完的经历、伤痕和如今的目标重新交给伙伴理解" }],
+  ["第十二卷", { companions: ["唐三", "奥斯卡"], dailyDetail: "晕船、淡水、值夜、修船和长期考核中的恢复日构成远海生活", hiddenCost: "陌生环境会让陆地经验失效，也会让身体与意志的极限同时暴露", preparation: "检查补给、潮汐、伤势上限和任何人都能启动的退出信号" }],
+  ["第十三卷", { companions: ["宁荣荣", "大师"], dailyDetail: "难民安置、物资登记、伤员转运和战报核实组成战争最漫长的背景", hiddenCost: "胜利叙事容易省略普通人的损失，也容易把所有责任推给少数强者", preparation: "明确救援、补给、撤退与正面战场之间的优先顺序" }],
+  ["终卷", { companions: ["小舞", "唐三"], dailyDetail: "重建学校、寻找失散家人和恢复普通生活比庆功持续得更久", hiddenCost: "原著事件结束后，制度、偏见与创伤不会自动消失", preparation: "把一路得到的力量、关系与承诺变成可以长期承担的生活" }],
+];
+
+function getChapterTexture(chapter: string) {
+  return chapterTextures.find(([prefix]) => chapter.startsWith(prefix))?.[1] ?? chapterTextures.at(-1)![1];
+}
+
+function makeAftermathSeed(seed: CanonSceneSeed): CanonSceneSeed {
+  const texture = getChapterTexture(seed.chapter);
+  const [companion, mentor] = texture.companions;
+  return {
+    id: `${seed.id}_aftermath`,
+    chapter: seed.chapter,
+    title: `余波 · ${seed.title}`,
+    anchor: `${seed.anchor}后的生活与人物反应`,
+    location: seed.location,
+    season: `${seed.season} · 事后`,
+    quest: `处理“${seed.title}”留下的关系、伤势与现实问题`,
+    intro: `“${seed.title}”没有在选择落下后立刻结束。${texture.dailyDetail}。你和${companion}把刚才发生的事重新讲了一遍，才发现每个人记住的细节并不相同：有人在意结果，有人在意谁替谁承担了风险，也有人直到安静下来才承认自己害怕。\n\n${texture.hiddenCost}。你需要处理装备、伤势和没有说清的话，也要判断自己的决定是否真的符合“{{lifeGoal}}”。这段余波不会改变原著大事件，却会决定伙伴以后为什么愿意相信你。`,
+    choices: [
+      `和${companion}逐项复盘决定与遗漏`,
+      `主动承担善后，不把代价留给别人`,
+      `找${mentor}说明自己的犹豫与真实判断`,
+    ],
+    dialogue: [
+      [companion, `刚才大家都在往前冲，现在安静下来，才知道有些话没有说清。`],
+      ["你", `那就从“${seed.title}”里最不愿回想的部分开始。结果可以记在战报里，害怕和犹豫也应该有人记得。`],
+      [mentor, `能够复盘代价，才算真正经历过一件事。下一次别只重复正确答案。`],
+    ],
+    relationshipEffects: [1, 1, 1],
+  };
+}
+
+function makePreparationSeed(seed: CanonSceneSeed, nextSeed?: CanonSceneSeed): CanonSceneSeed {
+  const texture = getChapterTexture(seed.chapter);
+  const [companion, mentor] = texture.companions;
+  const destination = nextSeed?.location ?? "重建中的斗罗大陆";
+  const nextTitle = nextSeed?.title ?? "写在原著之后";
+  const nextQuest = nextSeed?.quest ?? "决定原著时代结束后的人生";
+  return {
+    id: `${seed.id}_preparation`,
+    chapter: seed.chapter,
+    title: `幕间 · ${nextTitle}之前`,
+    anchor: `原著时间线补完：从“${seed.title}”过渡到“${nextTitle}”`,
+    location: destination,
+    season: nextSeed ? `${nextSeed.season} · 前夕` : "新历第一年 · 春前",
+    quest: `为“${nextTitle}”做好真实而具体的准备`,
+    intro: `前往${destination}并不是画面一转就能完成。路费、课程、伤药、情报和队伍分工都要有人负责，途中也会遇到与主线无关却必须处理的小麻烦。${texture.preparation}，你才真正意识到“${nextQuest}”不是一句任务提示。\n\n${companion}拿来上一阶段的记录，${mentor}则要求所有人分别说出最坏情况。你们没有提前知道原著结果，只能根据此刻掌握的信息作出准备。那些不起眼的决定，将在“${nextTitle}”真正发生时变成站位、信任和活下来的机会。`,
+    choices: [
+      `与${companion}完成物资、伤势和联络检查`,
+      `围绕“${nextQuest}”预演最坏情况`,
+      `留出半天处理伙伴没有说出口的顾虑`,
+    ],
+    dialogue: [
+      [mentor, `别因为知道下一段故事的名字，就以为自己已经知道会发生什么。`],
+      [companion, `我们能做的是把能准备的事情做完，剩下的到了“${nextTitle}”再一起面对。`],
+      ["你", `我会记住。同行不是跟着结果赶路，而是参与每一段抵达结果的过程。`],
+    ],
+    relationshipEffects: [1, 0, 1],
+  };
+}
+
+const expandedSeeds: CanonSceneSeed[] = coreSeeds.flatMap((seed, index) => {
+  const { nextId: _discardedNextId, ...linearSeed } = seed;
+  const nextSeed = coreSeeds[index + 1];
+  const coreExperience = 55 + Math.floor(index / 4) * 8;
+  const interludeExperience = 18 + Math.floor(index / 6) * 4;
+  return [
+    { ...linearSeed, experienceBase: coreExperience },
+    { ...makeAftermathSeed(seed), experienceBase: interludeExperience },
+    { ...makePreparationSeed(seed, nextSeed), experienceBase: interludeExperience + 4 },
+  ];
+});
+
+const canonSceneCount = expandedSeeds.length + 1;
+
 function makeNode(seed: CanonSceneSeed, index: number): StoryNode {
-  const nextId = seed.nextId ?? seeds[index + 1]?.id ?? "canon_crossroads";
+  const nextId = seed.nextId ?? expandedSeeds[index + 1]?.id ?? "canon_crossroads";
   return {
     id: seed.id,
     chapter: seed.chapter,
@@ -483,9 +583,9 @@ function makeNode(seed: CanonSceneSeed, index: number): StoryNode {
     intro: seed.intro,
     canonAnchor: seed.anchor,
     sceneIndex: index + 1,
-    sceneCount: seeds.length,
+    sceneCount: canonSceneCount,
     timelineNote: "原著重大事件按时间推进；你的选择会改变关系、立场、战术与个人结局。",
-    dialogue: keyDialogues[seed.id]?.map(([speaker, text]) => ({ speaker, text })),
+    dialogue: (seed.dialogue ?? keyDialogues[seed.id])?.map(([speaker, text]) => ({ speaker, text })),
     choices: seed.choices.map((label, choiceIndex) => ({
       id: `${seed.id.replace("canon_", "")}_${choiceIndex + 1}`,
       label,
@@ -497,8 +597,8 @@ function makeNode(seed: CanonSceneSeed, index: number): StoryNode {
           : `你选择了“${label}”。既定事件仍在前进，但你的处理方式已经让这条时间线产生细小而真实的偏移。`,
       note: `已记录：${label}。${seed.anchor}。`,
       effect: {
-        experience: 55 + Math.floor(index / 4) * 8 + choiceIndex * 6,
-        relationship: choiceIndex === 1 ? 3 : choiceIndex === 0 ? 2 : 0,
+        experience: (seed.experienceBase ?? 20) + choiceIndex * 6,
+        relationship: seed.relationshipEffects?.[choiceIndex] ?? (choiceIndex === 1 ? 3 : choiceIndex === 0 ? 2 : 0),
         addFlags: [...pathFlags.slice(choiceIndex, choiceIndex + 1), ...(seed.flags?.[choiceIndex] ?? []), ...(seed.milestoneFlags ?? [])],
         rewardItemId: seed.rewardItemId,
       },
@@ -506,7 +606,7 @@ function makeNode(seed: CanonSceneSeed, index: number): StoryNode {
   };
 }
 
-const canonNodes = Object.fromEntries(seeds.map((seed, index) => [seed.id, makeNode(seed, index)]));
+const canonNodes = Object.fromEntries(expandedSeeds.map((seed, index) => [seed.id, makeNode(seed, index)]));
 
 export const CANON_ENDINGS = ["大陆新芽", "史莱克长明", "无界行者"] as const;
 
@@ -521,8 +621,8 @@ export const canonStoryNodes: Record<string, StoryNode> = {
     quest: "为自己的平行人生选择结局",
     intro: "你翻看一路保存的学院证明、斗魂徽章和伙伴来信。原著时代的大事件已经走到尾声，但你的人生并没有因此结束。过去的选择决定了哪些道路真正向你开放。",
     canonAnchor: "原著主线完成，玩家人生继续",
-    sceneIndex: seeds.length,
-    sceneCount: seeds.length,
+    sceneIndex: canonSceneCount,
+    sceneCount: canonSceneCount,
     timelineNote: "这里结算的是玩家自己的道路，而不是替代任何原著角色。",
     choices: [
       {
@@ -547,5 +647,9 @@ export const canonStoryNodes: Record<string, StoryNode> = {
   canon_ending_open_horizon: { id: "canon_ending_open_horizon", chapter: "原著同行结局", title: "无界行者", location: "大陆边界之外", season: "下一次春天", quest: "这条原著同行时间线已经完成", choices: [], endingName: "无界行者", intro: "地图边缘出现新的山脉与港口。你没有成为任何人的附属传说，却始终带着这段时代留下的友情与判断。" },
 };
 
-export const CANON_START_NODE_ID = seeds[0].id;
-export const CANON_SCENE_COUNT = seeds.length;
+export const CANON_START_NODE_ID = coreSeeds[0].id;
+export const CANON_SCENE_COUNT = canonSceneCount;
+export const CANON_SCENE_INDEXES = Object.freeze(Object.fromEntries([
+  ...expandedSeeds.map((seed, index) => [seed.id, index + 1] as const),
+  ["canon_crossroads", canonSceneCount] as const,
+]));

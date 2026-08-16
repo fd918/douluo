@@ -327,7 +327,7 @@ export const storyNodes: Record<string, StoryNode> = {
   ...canonStoryNodes,
 };
 
-export { CANON_SCENE_COUNT, CANON_START_NODE_ID } from "./canonStory.ts";
+export { CANON_SCENE_COUNT, CANON_SCENE_INDEXES, CANON_START_NODE_ID } from "./canonStory.ts";
 
 export function formatStoryText(text: string, game: StoryState) {
   const replacements: Record<string, string> = {
@@ -360,11 +360,25 @@ export function getStoryNode(game: StoryState) {
     ?? (game.storyMode === "canon" ? storyNodes[CANON_START_NODE_ID] : storyNodes.notting_street);
 }
 
+function getPacedNextNode(nextId: string, pace: StoryState["narrativePace"]) {
+  let nextNode = storyNodes[nextId];
+  if (!nextNode || pace === "immersive" || !nextNode.id.startsWith("canon_")) return nextNode;
+  const shouldSkip = (id: string) => pace === "fast"
+    ? id.endsWith("_aftermath") || id.endsWith("_preparation")
+    : id.endsWith("_preparation");
+  while (nextNode && shouldSkip(nextNode.id)) {
+    const onward = nextNode.choices[0]?.nextId;
+    nextNode = onward ? storyNodes[onward] : nextNode;
+    if (!onward) break;
+  }
+  return nextNode;
+}
+
 export function resolveStoryChoice(game: StoryState, choiceId: string, customAction?: string): StoryResolution | null {
   const currentNode = getStoryNode(game);
   const choice = currentNode.choices.find((item) => item.id === choiceId);
   if (!choice || (choice.condition && !choice.condition(game))) return null;
-  const nextNode = storyNodes[choice.nextId];
+  const nextNode = getPacedNextNode(choice.nextId, game.narrativePace);
   if (!nextNode) return null;
   const effect = choice.effect ?? {};
   const formattedChoice = formatStoryText(choice.label, game);

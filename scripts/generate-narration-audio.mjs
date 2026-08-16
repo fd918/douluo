@@ -42,11 +42,46 @@ const fateStoryNodeIds = new Set([
   "sea_god_shore",
   "deep_sea_crossroads",
 ]);
+const fateCanonNodeIds = new Set([
+  "canon_awakening_morning",
+  "canon_awakening_hall",
+  "canon_ring_choice",
+  "canon_graduation_eve",
+  "canon_zhaowuji",
+  "canon_titan_ape",
+  "canon_spider_crisis",
+  "canon_xiaowu_exposed",
+  "canon_departure_five_years",
+  "canon_reunion",
+  "canon_magic_whale",
+  "canon_seagod_arrival",
+  "canon_final_war",
+  "canon_after_war",
+  "canon_crossroads",
+  "canon_ending_new_academy",
+  "canon_ending_shrek_legacy",
+  "canon_ending_open_horizon",
+]);
 
 function getStoryNarratorRole(currentNode, nextNode) {
   if (fateStoryNodeIds.has(currentNode.id)) return "fate";
   if (nextNode?.id === "second_ring_awakened" || nextNode?.choices.length === 0) return "fate";
   return "story";
+}
+
+function buildStaticCanonNarration(node) {
+  const replacements = {
+    name: "你",
+    martialSoul: "你的武魂",
+    identity: "原著同行者",
+    talent: "属于自己的天赋",
+    originPlace: "法斯诺行省的家乡",
+    background: "你的家庭",
+    lifeGoal: "最初的人生目标",
+    secret: "没有向伙伴说出的心事",
+  };
+  const intro = node.intro.replace(/\{\{(\w+)\}\}/g, (placeholder, key) => replacements[key] ?? placeholder);
+  return `${node.title}。${intro}`;
 }
 
 function wait(milliseconds) {
@@ -96,7 +131,7 @@ function getClips() {
     },
   ];
 
-  for (const currentNode of Object.values(storyNodes)) {
+  for (const currentNode of Object.values(storyNodes).filter((node) => !node.id.startsWith("canon_"))) {
     for (const choice of currentNode.choices) {
       const nextNode = storyNodes[choice.nextId];
       const bridge = nextNode ? buildSceneBridge(currentNode, nextNode) : "";
@@ -107,6 +142,14 @@ function getClips() {
         role: getStoryNarratorRole(currentNode, nextNode),
       });
     }
+  }
+  for (const canonNode of Object.values(storyNodes).filter((node) => node.id.startsWith("canon_") && node.intro)) {
+    clips.push({
+      id: `canon-scene-${canonNode.id}`,
+      text: buildStaticCanonNarration(canonNode),
+      source: `原著同行 · ${canonNode.chapter} · ${canonNode.title}`,
+      role: fateCanonNodeIds.has(canonNode.id) ? "fate" : "story",
+    });
   }
   return clips;
 }
@@ -171,7 +214,8 @@ async function main() {
   let cursor = 0;
 
   try {
-    const workers = Array.from({ length: 1 }, async () => {
+    const workerCount = Math.max(1, Math.min(3, Number(process.env.NARRATION_WORKERS) || 2));
+    const workers = Array.from({ length: workerCount }, async () => {
       while (cursor < clips.length) {
         const index = cursor;
         cursor += 1;

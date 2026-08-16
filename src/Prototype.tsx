@@ -36,6 +36,7 @@ import {
 } from "./ai";
 import {
   ALL_ENDINGS,
+  CANON_SCENE_INDEXES,
   CANON_START_NODE_ID,
   formatStoryText,
   getDefaultCustomChoice,
@@ -49,6 +50,7 @@ import { useNarration, type NarrationStatus } from "./audio/useNarration";
 import {
   PROLOGUE_NARRATION,
   PROLOGUE_PARAGRAPHS,
+  canonSceneNarrationClipId,
   narrationClipUrl,
 } from "./narrationContent";
 import { publicAssetUrl } from "./publicAsset";
@@ -925,10 +927,10 @@ function chooseMemoryWitness(text: string, relationships: Record<CharacterId, nu
 }
 
 const canonNpcMinimumScene: Partial<Record<NpcActionId, number>> = {
-  "xiao-wu-visit": 6,
-  "dai-mubai-conflict": 25,
-  "ning-rongrong-romance": 33,
-  "oscar-quest": 27,
+  "xiao-wu-visit": CANON_SCENE_INDEXES.canon_seven_dorm,
+  "dai-mubai-conflict": CANON_SCENE_INDEXES.canon_soto_arrival,
+  "ning-rongrong-romance": CANON_SCENE_INDEXES.canon_shrek_second_test,
+  "oscar-quest": CANON_SCENE_INDEXES.canon_shrek_dorm,
 };
 
 function isNpcActionChronologicallyAvailable(game: GameState, actionId: NpcActionId) {
@@ -1206,7 +1208,11 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
     narrative: resolution.narrative,
     note: resolution.note,
     storyNarrative: resolution.narrative,
-    storyNarrationClipId: game.storyMode === "canon" || customAction ? null : `story-${game.currentStoryNodeId}-${choiceId}`,
+    storyNarrationClipId: customAction
+      ? null
+      : game.storyMode === "canon"
+        ? canonSceneNarrationClipId(resolution.nextNodeId)
+        : `story-${game.currentStoryNodeId}-${choiceId}`,
     storyNote: resolution.note,
   };
   if (next.storyMode === "canon" && resolution.flags.includes("第一魂环已吸收") && next.soulRings.length === 0) {
@@ -1251,10 +1257,10 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
 function isLocationUnlocked(location: WorldLocation, game: GameState) {
   if (game.storyMode === "canon") {
     const sceneIndex = getStoryNode(game).sceneIndex ?? 1;
-    if (location.id === "notting-city") return sceneIndex >= 4;
-    if (location.id === "shrek-academy") return sceneIndex >= 22;
-    if (location.id === "star-forest") return sceneIndex >= 34;
-    if (location.id === "sea-god-island") return sceneIndex >= 56;
+    if (location.id === "notting-city") return sceneIndex >= CANON_SCENE_INDEXES.canon_road_to_notting;
+    if (location.id === "shrek-academy") return sceneIndex >= CANON_SCENE_INDEXES.canon_soto_arrival;
+    if (location.id === "star-forest") return sceneIndex >= CANON_SCENE_INDEXES.canon_star_departure;
+    if (location.id === "sea-god-island") return sceneIndex >= CANON_SCENE_INDEXES.canon_sea_departure;
   }
   return location.unlocked || (
     location.id === "sea-god-island" &&
@@ -1606,7 +1612,7 @@ export default function Prototype() {
       martialAttribute: martialSoul.attribute,
       soulRings: [],
       currentStoryNodeId: CANON_START_NODE_ID,
-      storyNarrationClipId: null,
+      storyNarrationClipId: canonSceneNarrationClipId(CANON_START_NODE_ID),
     };
     const openingNarration = getStoryIntro(base);
     const openingNode = getStoryNode(base);
@@ -1624,7 +1630,7 @@ export default function Prototype() {
     keyboard.hide();
     setSession(createSession(nextGame));
     lastNarrationKeyRef.current = `${nextGame.currentStoryNodeId}:${nextGame.storyNarrative}`;
-    narration.speak(openingNarration);
+    narration.speak(openingNarration, narrationClipUrl(nextGame.storyNarrationClipId));
     music.playEvent("martial_soul_awakened");
     window.setTimeout(() => {
       resetPhoneViewport();
@@ -1635,7 +1641,7 @@ export default function Prototype() {
 
   const startPrologue = () => {
     keyboard.hide();
-    narration.speak(PROLOGUE_NARRATION);
+    narration.speak(PROLOGUE_NARRATION, narrationClipUrl("prologue"));
     setStage("prologue");
   };
 
@@ -2938,9 +2944,9 @@ function CreationScreen(props: CreationProps) {
       <fieldset className="choice-fieldset pace-grid">
         <legend>剧情节奏</legend>
         {([
-          ["immersive", "沉浸", "完整场景与人物交流，推荐首次游玩"],
-          ["standard", "标准", "保留关键对话与成长过程"],
-          ["fast", "快速", "压缩过场，更快抵达重大事件"],
+          ["immersive", "沉浸", "184段完整场景、余波与人物交流，推荐首次游玩"],
+          ["standard", "标准", "约123段，保留重大事件与事后交流"],
+          ["fast", "快速", "约62段核心线，更快抵达重大事件"],
         ] as const).map(([value, title, detail]) => (
           <button className={props.narrativePace === value ? "pace-card selected" : "pace-card"} key={value} type="button" onClick={() => props.onNarrativePaceChange(value)}>
             <strong>{title}{value === "immersive" ? " · 推荐" : ""}</strong><small>{detail}</small>
@@ -3138,7 +3144,8 @@ function WorldScreen({
   const enemy = ENEMIES[game.victories % ENEMIES.length];
   const currentLocation = getLocationByName(game.location);
   const storyNode = getStoryNode(game);
-  const canExploreWorld = game.storyMode !== "canon" || (storyNode.sceneIndex ?? 1) >= 4;
+  const canExploreWorld = game.storyMode !== "canon"
+    || (storyNode.sceneIndex ?? 1) >= CANON_SCENE_INDEXES.canon_road_to_notting;
   const progress = getContentProgress(game);
   const unlockedCharacters = getUnlockedExtendedCharacters(progress);
   const recentWorldEvent = game.worldDirector.eventHistory.at(-1);
@@ -3250,7 +3257,12 @@ function RelationsScreen({
   const required = soulExperienceRequired(game.soulPower);
   const sceneIndex = getStoryNode(game).sceneIndex ?? Number.POSITIVE_INFINITY;
   const introducedCharacters = game.storyMode === "canon"
-    ? characters.filter((character) => sceneIndex >= ({ "xiao-wu": 6, "ning-rongrong": 23, "dai-mubai": 23, oscar: 27 }[character.id]))
+    ? characters.filter((character) => sceneIndex >= ({
+      "xiao-wu": CANON_SCENE_INDEXES.canon_seven_dorm,
+      "ning-rongrong": CANON_SCENE_INDEXES.canon_shrek_second_test,
+      "dai-mubai": CANON_SCENE_INDEXES.canon_soto_arrival,
+      oscar: CANON_SCENE_INDEXES.canon_shrek_dorm,
+    }[character.id]))
     : characters;
   return (
     <section className="relations-screen">

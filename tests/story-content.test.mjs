@@ -8,6 +8,7 @@ import {
   resolveStoryChoice,
   storyNodes,
 } from "../src/story.ts";
+import { canonSceneNarrationClipId } from "../src/narrationText.ts";
 
 test("every story choice points to a real node", () => {
   for (const current of Object.values(storyNodes)) {
@@ -40,14 +41,15 @@ test("all legacy and original-companion endings are reachable", () => {
 });
 
 test("原著同行主线包含足够密度的完整场景", () => {
-  assert.ok(CANON_SCENE_COUNT >= 60);
+  assert.ok(CANON_SCENE_COUNT >= 180);
   const canonScenes = Object.values(storyNodes).filter((current) => current.id.startsWith("canon_") && current.sceneIndex);
-  assert.ok(canonScenes.length >= 60);
+  assert.ok(canonScenes.length >= 180);
   for (const scene of canonScenes.filter((current) => current.choices.length > 0 && current.id !== "canon_crossroads")) {
     assert.ok(scene.intro.length >= 120, `${scene.id} intro is too short`);
     assert.ok(scene.canonAnchor, `${scene.id} needs a canon anchor`);
     assert.equal(scene.choices.length, 3, `${scene.id} needs three meaningful choices`);
   }
+  assert.ok(canonScenes.filter((scene) => scene.dialogue?.length >= 3).length >= 135, "细分主线需要足够多的场景对白");
 });
 
 test("原著同行从觉醒一路覆盖诺丁、史莱克、魂师大赛和海神岛", () => {
@@ -78,8 +80,8 @@ test("武魂、姓名和人生设定会写入场景且不会遗留模板", () =>
   const resolution = resolveStoryChoice(game, "awakening_hall_1");
   assert.ok(resolution);
   assert.ok(!resolution.narrative.includes("{{"));
-  assert.equal(resolution.nextNodeId, "canon_family_night");
-  assert.match(resolution.narrative, /工读生名额/);
+  assert.equal(resolution.nextNodeId, "canon_awakening_hall_aftermath");
+  assert.match(resolution.narrative, /选择落下后/);
 });
 
 test("默认选择可以从六岁觉醒完整推进到原著同行结局", () => {
@@ -93,7 +95,7 @@ test("默认选择可以从六岁觉醒完整推进到原著同行结局", () =>
     martialSoul: "星辉罗盘",
   };
   const visited = [];
-  for (let turn = 0; turn < 80; turn += 1) {
+  for (let turn = 0; turn < 240; turn += 1) {
     const current = storyNodes[game.currentStoryNodeId];
     visited.push(current.id);
     if (current.choices.length === 0) break;
@@ -110,9 +112,42 @@ test("默认选择可以从六岁觉醒完整推进到原著同行结局", () =>
   }
   const ending = storyNodes[game.currentStoryNodeId];
   assert.equal(ending.endingName, "大陆新芽");
-  assert.ok(visited.length >= 62);
+  assert.ok(visited.length >= 184);
   assert.ok(game.storyFlags.includes("第一魂环已吸收"));
   assert.ok(game.storyFlags.includes("第二魂环已吸收"));
+});
+
+test("每个原著同行场景都有稳定的固定旁白 ID", () => {
+  const canonScenes = Object.values(storyNodes).filter((node) => node.id.startsWith("canon_") && node.intro);
+  assert.ok(canonScenes.length >= 180);
+  for (const scene of canonScenes) {
+    assert.equal(canonSceneNarrationClipId(scene.id), `canon-scene-${scene.id}`);
+  }
+});
+
+test("沉浸、标准和快速节奏分别保留184、约123和约62段主线", () => {
+  const routeLength = (narrativePace) => {
+    let game = {
+      currentStoryNodeId: CANON_START_NODE_ID,
+      storyMode: "canon",
+      narrativePace,
+      storyFlags: [],
+      relationship: 35,
+    };
+    let turns = 0;
+    while (turns < 240) {
+      const current = storyNodes[game.currentStoryNodeId];
+      if (current.choices.length === 0) break;
+      const resolution = resolveStoryChoice(game, current.choices[0].id);
+      assert.ok(resolution);
+      game = { ...game, currentStoryNodeId: resolution.nextNodeId, storyFlags: resolution.flags };
+      turns += 1;
+    }
+    return turns;
+  };
+  assert.ok(routeLength("immersive") >= 184);
+  assert.ok(routeLength("standard") >= 123 && routeLength("standard") <= 125);
+  assert.ok(routeLength("fast") >= 62 && routeLength("fast") <= 64);
 });
 
 test("the expanded saga includes the second soul ring, tournament, voyage and Sea God Island", () => {
