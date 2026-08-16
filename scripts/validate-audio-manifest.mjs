@@ -6,6 +6,8 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const gameRoot = path.resolve(scriptDirectory, "..");
 const audioRoot = path.join(gameRoot, "public", "audio", "douluo");
 const manifestPath = path.join(audioRoot, "music_manifest.json");
+const narrationRoot = path.join(audioRoot, "narration");
+const narrationManifestPath = path.join(narrationRoot, "manifest.json");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -70,7 +72,29 @@ async function main() {
   assert(stingerCount === 7, `短音效数量应为 7，实际为 ${stingerCount}`);
   assert(ids.size === 15, `音乐总数应为 15，实际为 ${ids.size}`);
 
-  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效，音乐 ID 均唯一。`);
+  await access(narrationManifestPath);
+  const narrationManifest = JSON.parse(await readFile(narrationManifestPath, "utf8"));
+  assert(Array.isArray(narrationManifest.clips), "narration manifest.clips 必须是数组");
+  const narrationIds = new Set();
+  for (const [index, clip] of narrationManifest.clips.entries()) {
+    const label = `第 ${index + 1} 段旁白`;
+    assert(isNonEmptyString(clip.id), `${label}缺少 id`);
+    assert(!narrationIds.has(clip.id), `旁白 ID 重复：${clip.id}`);
+    narrationIds.add(clip.id);
+    assert(isNonEmptyString(clip.text), `${clip.id} 缺少朗读文本`);
+    assert(isNonEmptyString(clip.source), `${clip.id} 缺少剧情来源`);
+    assert(clip.file === `${clip.id}.mp3`, `${clip.id} 的文件名与 ID 不一致`);
+    const resolvedFile = path.resolve(narrationRoot, clip.file);
+    assert(resolvedFile.startsWith(`${narrationRoot}${path.sep}`), `${clip.id} 的文件路径无效`);
+    await access(resolvedFile);
+    const fileStats = await stat(resolvedFile);
+    assert(fileStats.isFile() && fileStats.size > 1000, `${clip.id} 的 MP3 文件为空或无效`);
+  }
+  assert(narrationIds.has("prologue"), "旁白包缺少世界序章");
+  assert(narrationIds.has("timeline-restart"), "旁白包缺少时间线重启内容");
+  assert(narrationIds.size === 96, `旁白总数应为 96，实际为 ${narrationIds.size}`);
+
+  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效、${narrationIds.size} 段兼容旁白。`);
 }
 
 main().catch((error) => {

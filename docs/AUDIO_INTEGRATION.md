@@ -26,11 +26,15 @@
 ## 语音旁白
 
 - React 接入：`src/audio/useNarration.ts`
+- 兼容旁白目录：`public/audio/douluo/narration/`
+- 兼容旁白清单：`public/audio/douluo/narration/manifest.json`
 - 本地设置键：`douluo.narration.settings.v1`
-- 实现方式：浏览器 `Web Speech API`（网页语音接口），优先使用本地 `zh-CN` 中文音色，不上传旁白文字，不需要 API Key。
+- 实现方式：固定剧情优先使用随游戏发布的 MP3 普通话旁白，不需要 API Key，兼容不提供 `Web Speech API`（网页系统语音接口）的微信/安卓 WebView；动态 AI 与自由输入内容在设备支持时使用本地 `zh-CN` 中文系统音色。
+- 当前共有 96 段 24kHz 单声道、32kbps MP3：1 段序章、6 段武魂开局、1 段时间线重启、88 段正式剧情选择。每次只按需加载当前一段，不会首屏下载整套语音。
 - 首次点击“开始新的人生”后自动朗读序章；进入游戏后，仅在剧情页对新的主线旁白自动朗读。
 - 剧情页提供开关、暂停/继续、重播三个 44px 触控按钮；“档案”页提供独立总开关。
-- 朗读状态会将 BGM 压低 10dB，结束、暂停或关闭时恢复。不支持系统语音的浏览器仍可正常阅读文字和游玩。
+- 朗读状态会将 BGM 压低 10dB，结束、暂停或关闭时恢复。若手机阻止网页自动播放，下一次点击页面会直接重试当前录制旁白。
+- 重新生成兼容旁白：在项目目录运行 `npm run generate:narration`，随后运行 `npm run test:audio` 检查 96 个文件、ID 和清单。
 
 ## 验证
 
