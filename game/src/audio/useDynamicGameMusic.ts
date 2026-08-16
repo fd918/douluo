@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createDynamicMusicController, type DynamicMusicController } from "./index";
 
 type MusicContext = {
-  stage: "welcome" | "creation" | "game";
+  stage: "welcome" | "prologue" | "creation" | "game";
   activeTab: "story" | "world" | "relations" | "bag" | "archive";
   location: string;
   chapter: string;
@@ -81,15 +81,23 @@ export function useDynamicGameMusic(context: MusicContext) {
   const toggleMuted = useCallback(async () => {
     const controller = controllerRef.current;
     if (!controller) return;
-    if (!controller.getSnapshot().unlocked) await controller.unlock();
+    const unlocked = controller.getSnapshot().unlocked || await controller.unlock();
+    if (!unlocked) return;
     const nextMuted = !controller.getSettings().muted;
     controller.setMuted(nextMuted);
     setMuted(nextMuted);
   }, []);
 
-  const playEvent = useCallback((event: string) => {
-    void controllerRef.current?.playEvent(event);
+  const playEvent = useCallback(async (event: string) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    const unlocked = controller.getSnapshot().unlocked || await controller.unlock();
+    if (unlocked) await controller.playEvent(event);
   }, []);
 
-  return { muted, ready, toggleMuted, playEvent };
+  const setNarrationDucking = useCallback((active: boolean) => {
+    controllerRef.current?.setBackgroundDucking(active, -10);
+  }, []);
+
+  return { muted, ready, toggleMuted, playEvent, setNarrationDucking };
 }

@@ -245,6 +245,19 @@
       "priority": 90,
       "duck_bgm_db": -12,
       "resume_previous_bgm": false
+    },
+    {
+      "id": "stinger_choice",
+      "name": "命运落子",
+      "type": "stinger",
+      "file": "stingers/stinger_choice.wav",
+      "duration_seconds": 0.28,
+      "events": [
+        "story_choice"
+      ],
+      "priority": 30,
+      "duck_bgm_db": -3,
+      "resume_previous_bgm": true
     }
   ]
 }

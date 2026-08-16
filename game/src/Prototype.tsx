@@ -5,19 +5,32 @@ import {
   ChatBubbleIcon,
   CheckCircledIcon,
   ChevronRightIcon,
+  ComponentInstanceIcon,
+  CrossCircledIcon,
+  CubeIcon,
   DrawingPinIcon,
+  EnvelopeClosedIcon,
   ExclamationTriangleIcon,
+  FileTextIcon,
   GlobeIcon,
+  Half2Icon,
   HeartFilledIcon,
+  IdCardIcon,
+  LayersIcon,
+  LightningBoltIcon,
   LockClosedIcon,
   MagicWandIcon,
   PaperPlaneIcon,
+  PauseIcon,
   PersonIcon,
+  PlayIcon,
   ReaderIcon,
   ReloadIcon,
+  SewingPinIcon,
   SpeakerLoudIcon,
   SpeakerOffIcon,
-  SunIcon,
+  StarIcon,
+  TokensIcon,
 } from "@radix-ui/react-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, KeyboardInput, KeyboardTextarea, MobileScroll, useKeyboard } from "./mobile";
@@ -36,6 +49,7 @@ import {
   type StoryHistoryEntry,
 } from "./story";
 import { useDynamicGameMusic } from "./audio/useDynamicGameMusic";
+import { useNarration, type NarrationStatus } from "./audio/useNarration";
 import { publicAssetUrl } from "./publicAsset";
 import {
   EXTENDED_CHARACTERS,
@@ -68,7 +82,7 @@ import {
 } from "./world-director";
 
 type TabId = "story" | "world" | "relations" | "bag" | "archive";
-type Stage = "welcome" | "creation" | "game";
+type Stage = "welcome" | "prologue" | "creation" | "game";
 type BagMode = "inventory" | "shop" | "auction";
 type SoulAttribute = "植物" | "水" | "火" | "兽" | "无";
 type EquipmentSlot = "护具" | "饰品" | "武器" | "头部魂骨" | "躯干魂骨" | "左臂魂骨" | "右臂魂骨" | "左腿魂骨" | "右腿魂骨" | "外附魂骨";
@@ -280,6 +294,17 @@ const LEGACY_SAVE_KEY = "douluo-life-simulator-save-v1";
 const STORY_SUMMARY_INTERVAL = 12;
 const STORY_SUMMARY_EVENT_LIMIT = 16;
 const DIALOGUE_MESSAGE_LIMIT = 20;
+const PROLOGUE_PARAGRAPHS = [
+  "斗罗大陆，一个没有魔法与斗气，却由武魂决定无数人命运的世界。每个人都会在六岁觉醒武魂，少数拥有魂力的人，则能通过魂环踏上魂师之路。",
+  "帝国、宗门、魂师学院与魂兽森林共同维持着脆弱的秩序。力量可以守护伙伴，也可能让人沦为欲望的容器；没有哪条道路天生正确。",
+  "你的故事将从法斯诺行省的诺丁城开始。学院后门一串泛着蓝光的脚印，正把平静的新生活引向一场横跨学院、森林、天斗城与远海的阴谋。",
+  "你可以结交伙伴、守护魂兽、追逐力量，也可以拒绝所有既定答案。每一次选择都会留在时间线上，并把你带向不同的结局。现在，先决定你要以怎样的身份醒来。",
+] as const;
+const PROLOGUE_NARRATION = PROLOGUE_PARAGRAPHS.join("");
+
+function mobileGameAssetUrl(path: string) {
+  return publicAssetUrl(path.replace(/\.png$/i, "-mobile.webp"));
+}
 
 const initialRelationships: Record<CharacterId, number> = {
   "xiao-wu": 35,
@@ -413,6 +438,38 @@ const ITEMS: Record<string, ItemDefinition> = {
   },
 };
 
+const ITEM_GLYPHS = {
+  academy_letter: EnvelopeClosedIcon,
+  old_purse: TokensIcon,
+  healing_herb: CrossCircledIcon,
+  blank_notebook: FileTextIcon,
+  focus_incense: MagicWandIcon,
+  apprentice_guard: Half2Icon,
+  cloth_armor: LayersIcon,
+  millennium_essence: StarIcon,
+  sea_crystal: ComponentInstanceIcon,
+  tournament_badge: IdCardIcon,
+  vast_sea_chart: DrawingPinIcon,
+  tide_armor: LayersIcon,
+  soul_energy_draught: LightningBoltIcon,
+  wind_chaser_right_leg_bone: SewingPinIcon,
+  ironback_torso_bone: CubeIcon,
+} as const;
+
+function ItemGlyph({ item, className = "" }: { item: ItemDefinition; className?: string }) {
+  const Icon = ITEM_GLYPHS[item.id as keyof typeof ITEM_GLYPHS] ?? BookmarkIcon;
+  const tone = item.category === "关键物品"
+    ? "quest"
+    : item.category === "消耗品"
+      ? "consumable"
+      : item.category === "魂骨"
+        ? "soul-bone"
+        : item.category === "装备"
+          ? "equipment"
+          : "common";
+  return <span className={`item-icon ${tone} ${className}`.trim()} aria-hidden="true"><Icon /></span>;
+}
+
 const INVENTORY_ORDER = [
   "academy_letter",
   "old_purse",
@@ -495,7 +552,7 @@ const initialGame: GameState = {
   location: "诺丁城",
   season: "三月·午后",
   narrative:
-    "你走在诺丁城的街道上，铁匠铺的敲击声隔着两条巷子传来。雨刚停，前方青石路上留着一串新鲜脚印，边缘浮着极淡的蓝光。那人走得很急，方向正是学院后门。",
+    "武魂觉醒后的第三天，你带着学院推荐信来到诺丁城。铁匠铺的敲击声隔着两条巷子传来，雨后的青石路上留着一串泛着蓝光的新鲜脚印。你原本只想完成入学报到，却在这一刻被卷入了另一条命运。",
   note: "发光的脚印不像普通行人留下的，附近似乎残留着植物系魂力。",
   martialSoul: "蓝银草",
   martialSoulId: "blue-silver-grass",
@@ -518,7 +575,7 @@ const initialGame: GameState = {
   storyCycle: 1,
   lastStoryChange: "新的时间线已经开启",
   storyNarrative:
-    "你走在诺丁城的街道上，铁匠铺的敲击声隔着两条巷子传来。雨刚停，前方青石路上留着一串泛着蓝光的新鲜脚印，方向正是学院后门。",
+    "武魂觉醒后的第三天，你带着学院推荐信来到诺丁城。铁匠铺的敲击声隔着两条巷子传来，雨后的青石路上留着一串泛着蓝光的新鲜脚印。你原本只想完成入学报到，却在这一刻被卷入了另一条命运。",
   storyNote: "脚印边缘残留着植物系魂力，这不是普通行人留下的痕迹。",
   storySummary: "",
   storySummaryThroughTurn: 0,
@@ -605,7 +662,7 @@ const characters: CharacterProfile[] = [
     title: "灵动敏攻系魂师",
     affiliation: "史莱克学院",
     martialSoul: "柔骨兔",
-    image: publicAssetUrl("game-assets/xiao-wu.png"),
+    image: mobileGameAssetUrl("game-assets/xiao-wu.png"),
     tone: "pink",
     profile: "性格直率活泼，珍视真正的伙伴。看似无忧无虑，却对魂兽与星斗大森林的话题格外敏感。",
     story: "她邀请你在训练结束后去学院后山。林间有一串不属于普通野兽的足迹，她似乎知道那是什么，却没有立刻说破。",
@@ -623,7 +680,7 @@ const characters: CharacterProfile[] = [
     title: "强攻系战魂尊",
     affiliation: "史莱克学院",
     martialSoul: "邪眸白虎",
-    image: publicAssetUrl("game-assets/dai-mubai.png"),
+    image: mobileGameAssetUrl("game-assets/dai-mubai.png"),
     tone: "blue",
     profile: "外表冷峻强势，战斗时果断直接。对认可的同伴很有担当，但很少主动提起自己的过去。",
     story: "训练场边缘留着一道被虎爪撕开的深痕。戴沐白愿意给你一次正面对练的机会，这也是他判断同伴的方式。",
@@ -641,7 +698,7 @@ const characters: CharacterProfile[] = [
     title: "食物系器魂师",
     affiliation: "史莱克学院",
     martialSoul: "香肠",
-    image: publicAssetUrl("game-assets/oscar.png"),
+    image: mobileGameAssetUrl("game-assets/oscar.png"),
     tone: "green",
     profile: "看起来随性风趣，实际上观察细致。作为少见的先天满魂力食物系魂师，他比谁都清楚辅助同伴的责任。",
     story: "奥斯卡正在尝试改良恢复香肠的味道，需要有人陪他去集市辨认几种香料。一次普通采购，也可能遇见不普通的线索。",
@@ -659,7 +716,7 @@ const characters: CharacterProfile[] = [
     title: "七宝琉璃宗魂师",
     affiliation: "史莱克学院",
     martialSoul: "七宝琉璃塔",
-    image: publicAssetUrl("game-assets/ning-rongrong.png"),
+    image: mobileGameAssetUrl("game-assets/ning-rongrong.png"),
     tone: "gold",
     profile: "出身上三宗，知识与眼界远超同龄人。骄傲之外，她正在学习如何成为可以交付后背的伙伴。",
     story: "她收到一封来自宗门的密信，却发现封口魂力被人触碰过。宁荣荣希望你陪她查清是谁在学院外窥探七宝琉璃宗。",
@@ -1159,13 +1216,6 @@ function getLocationByName(name: string) {
   return locations.find((location) => location.name === name) ?? locations[0];
 }
 
-function getTravelStoryNode(locationId: LocationId) {
-  if (locationId === "star-forest") return "forest_edge";
-  if (locationId === "shrek-academy") return "shrek_gate";
-  if (locationId === "sea-god-island") return "sea_god_shore";
-  return "notting_street";
-}
-
 function getCurrentWorldLocationId(game: GameState): WorldLocationId {
   const direct = game.visitedWorldLocationIds.at(-1);
   if (direct) return direct;
@@ -1224,6 +1274,62 @@ function createLocalStorySummary(previousSummary: string, events: TimelineNode[]
   return `${combined.slice(0, 280)}……${combined.slice(-300)}`;
 }
 
+const narrationStatusLabels: Record<NarrationStatus, string> = {
+  idle: "等待下一段剧情",
+  speaking: "正在自动朗读",
+  paused: "旁白已暂停",
+  unavailable: "当前浏览器不支持语音",
+};
+
+function NarrationControls({
+  enabled,
+  status,
+  supported,
+  onToggle,
+  onPauseOrResume,
+  onReplay,
+}: {
+  enabled: boolean;
+  status: NarrationStatus;
+  supported: boolean;
+  onToggle: () => void;
+  onPauseOrResume: () => void;
+  onReplay: () => void;
+}) {
+  return (
+    <div className="narration-controls" aria-label="语音旁白控制">
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!supported}
+        aria-label={enabled ? "关闭自动语音旁白" : "开启自动语音旁白"}
+        aria-pressed={enabled}
+        title={enabled ? "关闭自动语音旁白" : "开启自动语音旁白"}
+      >
+        {enabled ? <SpeakerLoudIcon /> : <SpeakerOffIcon />}
+      </button>
+      <button
+        type="button"
+        onClick={onPauseOrResume}
+        disabled={!enabled || status === "idle" || status === "unavailable"}
+        aria-label={status === "paused" ? "继续语音旁白" : "暂停语音旁白"}
+        title={status === "paused" ? "继续语音旁白" : "暂停语音旁白"}
+      >
+        {status === "paused" ? <PlayIcon /> : <PauseIcon />}
+      </button>
+      <button
+        type="button"
+        onClick={onReplay}
+        disabled={!enabled || !supported}
+        aria-label="重新朗读当前旁白"
+        title="重新朗读当前旁白"
+      >
+        <ReloadIcon />
+      </button>
+    </div>
+  );
+}
+
 export default function Prototype() {
   const keyboard = useKeyboard();
   const savedSession = useMemo(loadSavedSession, []);
@@ -1248,6 +1354,7 @@ export default function Prototype() {
   const [selectedWorldEvent, setSelectedWorldEvent] = useState<RandomSideEventDefinition | null>(null);
   const [worldThinking, setWorldThinking] = useState(false);
   const summaryAttemptKeyRef = useRef("");
+  const lastNarrationKeyRef = useRef("");
   const game = session.game;
   const stats = useMemo(() => getStats(game), [game]);
   const selectedLocation = selectedLocationId
@@ -1281,6 +1388,29 @@ export default function Prototype() {
     chapter: currentStoryNode.chapter,
     inCombat: combat?.status === "active",
   });
+  const narration = useNarration();
+
+  useEffect(() => {
+    music.setNarrationDucking(narration.status === "speaking");
+    return () => music.setNarrationDucking(false);
+  }, [music.setNarrationDucking, narration.status]);
+
+  useEffect(() => {
+    if (stage !== "game") return;
+    if (!narration.enabled) {
+      lastNarrationKeyRef.current = "";
+      narration.stop();
+      return;
+    }
+    if (activeTab !== "story" || thinking) {
+      narration.stop();
+      return;
+    }
+    const narrationKey = `${game.currentStoryNodeId}:${game.storyNarrative}`;
+    if (lastNarrationKeyRef.current === narrationKey) return;
+    lastNarrationKeyRef.current = narrationKey;
+    narration.speak(game.storyNarrative);
+  }, [activeTab, game.currentStoryNodeId, game.storyNarrative, narration.enabled, narration.speak, narration.stop, stage, thinking]);
 
   useEffect(() => {
     if (stage !== "game") return;
@@ -1373,8 +1503,8 @@ export default function Prototype() {
       martialSoul: martialSoul.name,
       martialAttribute: martialSoul.attribute,
       soulRings: [firstRing],
-      narrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}`,
-      storyNarrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。命运的第一条线索，正指向诺丁城学院后门。`,
+      narrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}三天后，你带着学院推荐信来到诺丁城。雨后的青石路上，一串泛着蓝光的脚印正通向学院后门。`,
+      storyNarrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}三天后，你带着学院推荐信来到诺丁城。雨后的青石路上，一串泛着蓝光的脚印正通向学院后门。你的入学之日，也因此成为命运改变的起点。`,
       storyNote: `${martialSoul.identity} · 初始魂技：${martialSoul.initialSkill.name}`,
     };
     const nextGame = { ...base, currentHp: getStats(base).maxHp };
@@ -1388,12 +1518,24 @@ export default function Prototype() {
     }, 300);
   };
 
+  const startPrologue = () => {
+    keyboard.hide();
+    narration.speak(PROLOGUE_NARRATION);
+    setStage("prologue");
+  };
+
+  const continueFromPrologue = () => {
+    narration.stop();
+    setStage("creation");
+  };
+
   const chooseStory = (choiceId: string) => {
     if (thinking) return;
     const node = getStoryNode(game);
     const choice = node.choices.find((item) => item.id === choiceId);
     const resolution = resolveStoryChoice(game, choiceId);
     if (!choice || !resolution) return;
+    void music.playEvent("story_choice");
     setThinking(true);
     window.setTimeout(() => {
       commitGame(
@@ -1432,6 +1574,7 @@ export default function Prototype() {
     }
     const resolution = resolveStoryChoice(game, defaultChoice.id, action);
     if (!resolution) return;
+    void music.playEvent("story_choice");
 
     keyboard.hide();
     setCustomOpen(false);
@@ -1555,11 +1698,8 @@ export default function Prototype() {
               ...current,
               location: location.name,
               season: location.season,
-              currentStoryNodeId: getTravelStoryNode(location.id),
               narrative: location.arrival,
               note: location.note,
-              storyNarrative: location.arrival,
-              storyNote: location.note,
               lastStoryChange: `旅行抵达 · ${location.name}`,
               turns: current.turns + 1,
               visitedWorldLocationIds: current.visitedWorldLocationIds.includes(location.id as WorldLocationId)
@@ -1679,6 +1819,7 @@ export default function Prototype() {
   const respondToNpcAction = (responseIndex: number) => {
     const activeAction = getNpcAction(game.pendingNpcAction);
     if (!activeAction) return;
+    void music.playEvent("story_choice");
     const selectedResponse = npcActionResponses[activeAction.id][responseIndex];
     commitGame(
       (current) => {
@@ -1735,6 +1876,7 @@ export default function Prototype() {
 
   const resolveWorldEvent = async (event: RandomSideEventDefinition, choice: RandomEventChoice) => {
     if (worldThinking) return;
+    void music.playEvent("story_choice");
     setWorldThinking(true);
     const localDirective = localDirectiveFromEvent(event, choice);
     const allowedFlags = RANDOM_SIDE_EVENTS.flatMap((item) => item.choices.flatMap((itemChoice) => (
@@ -1803,8 +1945,6 @@ export default function Prototype() {
             : current.storyFlags,
           narrative: directive.summary,
           note: `${event.title} · ${choice.label}`,
-          storyNarrative: directive.summary,
-          storyNote: `${event.title} · ${choice.label}`,
           lastStoryChange: `${usedAi ? "AI 世界导演" : "本地世界事件"} · ${event.title}`,
         };
         for (const [characterId, delta] of Object.entries(choice.rewards.relationships ?? {})) {
@@ -2122,6 +2262,8 @@ export default function Prototype() {
   };
 
   const resetGame = () => {
+    narration.stop();
+    keyboard.hide();
     window.localStorage.removeItem(SAVE_KEY);
     window.localStorage.removeItem(LEGACY_SAVE_KEY);
     setSelectedLocationId(null);
@@ -2150,7 +2292,17 @@ export default function Prototype() {
     <div className="game-shell">
       <MobileScroll className="game-scroll" key={`${stage}-${activeTab}-${game.turns}`}>
         {stage === "welcome" ? (
-          <WelcomeScreen onStart={() => setStage("creation")} />
+          <WelcomeScreen onStart={startPrologue} />
+        ) : stage === "prologue" ? (
+          <PrologueScreen
+            narrationEnabled={narration.enabled}
+            narrationStatus={narration.status}
+            narrationSupported={narration.supported}
+            onToggleNarration={narration.toggleEnabled}
+            onPauseOrResume={narration.pauseOrResume}
+            onReplay={narration.replay}
+            onContinue={continueFromPrologue}
+          />
         ) : stage === "creation" ? (
           <CreationScreen
             name={name}
@@ -2169,8 +2321,17 @@ export default function Prototype() {
               <StoryScreen
                 game={game}
                 thinking={thinking}
+                musicMuted={music.muted}
+                musicReady={music.ready}
+                narrationEnabled={narration.enabled}
+                narrationStatus={narration.status}
+                narrationSupported={narration.supported}
                 onChoose={chooseStory}
                 onCustom={() => setCustomOpen(true)}
+                onToggleMusic={music.toggleMuted}
+                onToggleNarration={narration.toggleEnabled}
+                onPauseOrResumeNarration={narration.pauseOrResume}
+                onReplayNarration={narration.replay}
                 onRestart={restartStory}
                 onRespondToNpc={respondToNpcAction}
               />
@@ -2202,7 +2363,11 @@ export default function Prototype() {
                 session={session}
                 musicMuted={music.muted}
                 musicReady={music.ready}
+                narrationEnabled={narration.enabled}
+                narrationStatus={narration.status}
+                narrationSupported={narration.supported}
                 onToggleMusic={music.toggleMuted}
+                onToggleNarration={narration.toggleEnabled}
                 onSave={saveNow}
                 onRewind={rewindTo}
                 onReset={resetGame}
@@ -2377,10 +2542,10 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
   return (
     <main
       className="screen-content welcome-screen"
-      style={{ backgroundImage: `url("${publicAssetUrl("game-assets/notting-city.png")}")` }}
+      style={{ backgroundImage: `url("${mobileGameAssetUrl("game-assets/notting-city.png")}")` }}
     >
       <div className="welcome-emblem" aria-hidden="true">
-        <img src={publicAssetUrl("game-assets/soul-meter.png")} alt="" />
+        <img src={mobileGameAssetUrl("game-assets/soul-meter.png")} alt="" width="384" height="384" fetchPriority="high" />
       </div>
       <p className="eyebrow">沉浸式开放世界文字 RPG</p>
       <h1>斗罗大陆<br />人生模拟器</h1>
@@ -2396,6 +2561,56 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
         <span>动态世界</span>
         <span>分支回溯</span>
       </div>
+    </main>
+  );
+}
+
+function PrologueScreen({
+  narrationEnabled,
+  narrationStatus,
+  narrationSupported,
+  onToggleNarration,
+  onPauseOrResume,
+  onReplay,
+  onContinue,
+}: {
+  narrationEnabled: boolean;
+  narrationStatus: NarrationStatus;
+  narrationSupported: boolean;
+  onToggleNarration: () => void;
+  onPauseOrResume: () => void;
+  onReplay: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <main
+      className="screen-content prologue-screen"
+      style={{ backgroundImage: `url("${mobileGameAssetUrl("game-assets/world-map.png")}")` }}
+    >
+      <article className="prologue-panel">
+        <span className="section-kicker">世界序章 · 自动旁白</span>
+        <h1>在你的命运开始之前</h1>
+        <div className="prologue-status" role="status">
+          <span className={narrationStatus === "speaking" ? "active" : ""} aria-hidden="true" />
+          {narrationEnabled ? narrationStatusLabels[narrationStatus] : "自动旁白已关闭"}
+        </div>
+        <div className="prologue-copy">
+          {PROLOGUE_PARAGRAPHS.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+        </div>
+        <NarrationControls
+          enabled={narrationEnabled}
+          status={narrationStatus}
+          supported={narrationSupported}
+          onToggle={onToggleNarration}
+          onPauseOrResume={onPauseOrResume}
+          onReplay={onReplay}
+        />
+        <button className="primary-button prologue-continue" type="button" onClick={onContinue}>
+          塑造我的身份
+          <ChevronRightIcon />
+        </button>
+        <small className="prologue-hint">无需等待朗读结束，点击后会自动停止旁白并继续。</small>
+      </article>
     </main>
   );
 }
@@ -2492,15 +2707,33 @@ function CreationScreen(props: CreationProps) {
 function StoryScreen({
   game,
   thinking,
+  musicMuted,
+  musicReady,
+  narrationEnabled,
+  narrationStatus,
+  narrationSupported,
   onChoose,
   onCustom,
+  onToggleMusic,
+  onToggleNarration,
+  onPauseOrResumeNarration,
+  onReplayNarration,
   onRestart,
   onRespondToNpc,
 }: {
   game: GameState;
   thinking: boolean;
+  musicMuted: boolean;
+  musicReady: boolean;
+  narrationEnabled: boolean;
+  narrationStatus: NarrationStatus;
+  narrationSupported: boolean;
   onChoose: (choiceId: string) => void;
   onCustom: () => void;
+  onToggleMusic: () => void;
+  onToggleNarration: () => void;
+  onPauseOrResumeNarration: () => void;
+  onReplayNarration: () => void;
   onRestart: () => void;
   onRespondToNpc: (responseIndex: number) => void;
 }) {
@@ -2514,20 +2747,44 @@ function StoryScreen({
       <div className="story-chapter-bar"><span>{node.chapter}</span><strong>时间线 {game.storyCycle}</strong></div>
       <header className="location-bar">
         <span><DrawingPinIcon />{node.location} · {node.season}</span>
-        <SunIcon />
+        <button
+          className="story-audio-toggle"
+          type="button"
+          onClick={onToggleMusic}
+          disabled={!musicReady}
+          aria-label={musicReady ? (musicMuted ? "开启游戏声音" : "关闭游戏声音") : "游戏声音正在准备"}
+          aria-pressed={!musicMuted}
+          title={musicMuted ? "开启游戏声音" : "关闭游戏声音"}
+        >
+          {musicMuted ? <SpeakerOffIcon /> : <SpeakerLoudIcon />}
+        </button>
       </header>
       <div className="story-art">
-        <img src={publicAssetUrl(image)} alt={node.imageAlt ?? `${node.location}当前剧情场景`} />
+        <img src={mobileGameAssetUrl(image)} alt={node.imageAlt ?? `${node.location}当前剧情场景`} width="720" height="1279" fetchPriority="high" />
         <span className="story-scene-title"><small>{node.quest}</small><strong>{node.title}</strong></span>
       </div>
       <article className="narrative-card">
+        <div className="narrative-heading">
+          <span className="narrator-label">
+            <ReaderIcon />
+            <span>旁白<small>{narrationEnabled ? narrationStatusLabels[narrationStatus] : "自动旁白已关闭"}</small></span>
+          </span>
+          <NarrationControls
+            enabled={narrationEnabled}
+            status={narrationStatus}
+            supported={narrationSupported}
+            onToggle={onToggleNarration}
+            onPauseOrResume={onPauseOrResumeNarration}
+            onReplay={onReplayNarration}
+          />
+        </div>
         <p>{thinking ? "魂力在空气里轻轻震动，世界正在回应你的选择……" : game.storyNarrative}</p>
       </article>
       <div className="change-chip"><MagicWandIcon /><span>{game.lastStoryChange}</span></div>
       {activeNpcAction && activeNpcCharacter ? (
         <section className={`npc-action-card ${activeNpcCharacter.tone}`} aria-label={`${activeNpcCharacter.name}主动事件`}>
           <header>
-            <img src={activeNpcCharacter.image} alt={`${activeNpcCharacter.name}角色头像`} />
+            <img src={activeNpcCharacter.image} alt={`${activeNpcCharacter.name}角色头像`} width="384" height="384" decoding="async" />
             <div><small>{actionKindLabels[activeNpcAction.kind]}</small><strong>{activeNpcAction.title}</strong></div>
           </header>
           <p>{activeNpcAction.narrative}</p>
@@ -2603,7 +2860,7 @@ function WorldScreen({
     <section className="world-screen">
       <header className="page-title"><span>世界</span><GlobeIcon /></header>
       <div className="map-panel" aria-label="斗罗大陆旅行地图">
-        <img src={publicAssetUrl("game-assets/world-map.png")} alt="斗罗大陆可探索区域地图" />
+        <img src={mobileGameAssetUrl("game-assets/world-map.png")} alt="斗罗大陆可探索区域地图" width="720" height="1279" decoding="async" />
         {locations.map((location) => {
           const unlocked = isLocationUnlocked(location, game);
           return (
@@ -2709,13 +2966,13 @@ function RelationsScreen({
       <header className="profile-header">
         <div className="spirit-mark">
           {game.martialSoulId === "blue-silver-grass"
-            ? <img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂徽记" />
+            ? <img src={mobileGameAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂徽记" width="384" height="384" decoding="async" />
             : <span className={`martial-soul-glyph ${game.martialAttribute}`}>{game.martialSoul.slice(0, 1)}</span>}
         </div>
         <div><h1>{game.name}</h1><p>魂力 <strong>{game.soulPower}级</strong></p><p>武魂 <strong>{game.martialSoul} · {game.martialAttribute}</strong></p></div>
       </header>
       <div className="soul-meter compact-soul-meter">
-        <img src={publicAssetUrl("game-assets/soul-meter.png")} alt="魂力进度圆环" />
+        <img src={mobileGameAssetUrl("game-assets/soul-meter.png")} alt="魂力进度圆环" width="384" height="384" decoding="async" />
         <div><small>魂力</small><strong>{game.soulPower}<em>级</em></strong><span>{game.soulProgress} / {required}</span></div>
       </div>
       <div className="experience-track" role="progressbar" aria-label="魂力升级进度" aria-valuemin={0} aria-valuemax={required} aria-valuenow={game.soulProgress}>
@@ -2762,7 +3019,7 @@ function RelationsScreen({
             onClick={() => onSelectCharacter(character.id)}
             aria-label={`查看${character.name}的人物档案并对话，当前好感${score}`}
           >
-            <img src={character.image} alt={`${character.name}角色头像`} />
+            <img src={character.image} alt={`${character.name}角色头像`} width="384" height="384" loading="lazy" decoding="async" />
             <strong>{character.name}</strong>
             <span><HeartFilledIcon /> {getRelationshipLabel(score)} {score}</span>
             <i className="affection-track" aria-hidden="true">
@@ -2847,7 +3104,7 @@ function CharacterSheet({
   return (
     <div className={`character-sheet ${character.tone}`}>
       <section className="character-file" aria-label={`${character.name}人物档案`}>
-        <img src={character.image} alt={`${character.name}角色头像`} />
+        <img src={character.image} alt={`${character.name}角色头像`} width="384" height="384" decoding="async" />
         <div>
           <span>{character.affiliation}</span>
           <strong>武魂 · {character.martialSoul}</strong>
@@ -2970,7 +3227,7 @@ function BagScreen({
           const isEquipped = item.slot ? game.equipment[item.slot] === id : false;
           return (
             <button key={item.id} type="button" onClick={() => onSelectItem(id, mode)}>
-              <span className="item-icon"><BookmarkIcon /></span>
+              <ItemGlyph item={item} />
               <span><strong>{item.name}</strong><small>{item.category}{isEquipped ? " · 已装备" : ""}</small></span>
               <span className="item-value">{mode === "inventory" ? `× ${quantity}` : `${item.buyPrice} 金`}</span>
               <ChevronRightIcon />
@@ -2985,7 +3242,7 @@ function BagScreen({
             const sold = game.auctionPurchases.includes(listing.itemId);
             return (
               <article key={listing.itemId}>
-                <span className="item-icon"><ArchiveIcon /></span>
+                <ItemGlyph item={item} />
                 <div><strong>{item.name}</strong><small>{listing.seller} · {item.category}</small><p>{item.description}</p></div>
                 <button type="button" onClick={() => onBuyAuction(listing.itemId, listing.price)} disabled={sold || game.coins < listing.price}>
                   {sold ? "已拍得" : `${listing.price} 金`}
@@ -3032,7 +3289,10 @@ function ItemActionSheet({
     : [];
   return (
     <div className="item-action-sheet">
-      <div className="item-sheet-meta"><span>{item.category}</span><strong>持有 {quantity}</strong></div>
+      <div className="item-sheet-hero">
+        <ItemGlyph item={item} className="item-sheet-glyph" />
+        <div><span>{item.category}</span><strong>持有 {quantity}</strong></div>
+      </div>
       {bonusParts.length > 0 ? <p className="item-bonus">{bonusParts.join(" · ")}</p> : null}
       {source === "shop" ? (
         <button className="primary-button" type="button" onClick={onBuy} disabled={item.buyPrice === null || coins < (item.buyPrice ?? 0)}>
@@ -3073,7 +3333,7 @@ function CombatSheet({
         <article>
           <span className="combat-avatar player">
             {game.martialSoulId === "blue-silver-grass"
-              ? <img src={publicAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂" />
+              ? <img src={mobileGameAssetUrl("game-assets/blue-silver-grass.png")} alt="蓝银草武魂" width="384" height="384" decoding="async" />
               : <span className={`martial-soul-glyph ${game.martialAttribute}`}>{game.martialSoul.slice(0, 1)}</span>}
           </span>
           <small>{game.name}</small><strong>{game.soulPower}级 · {game.martialAttribute}</strong>
@@ -3130,11 +3390,27 @@ function CombatSheet({
   );
 }
 
-function ArchiveScreen({ session, musicMuted, musicReady, onToggleMusic, onSave, onRewind, onReset }: {
+function ArchiveScreen({
+  session,
+  musicMuted,
+  musicReady,
+  narrationEnabled,
+  narrationStatus,
+  narrationSupported,
+  onToggleMusic,
+  onToggleNarration,
+  onSave,
+  onRewind,
+  onReset,
+}: {
   session: GameSession;
   musicMuted: boolean;
   musicReady: boolean;
+  narrationEnabled: boolean;
+  narrationStatus: NarrationStatus;
+  narrationSupported: boolean;
   onToggleMusic: () => void;
+  onToggleNarration: () => void;
   onSave: () => void;
   onRewind: (nodeId: string) => void;
   onReset: () => void;
@@ -3166,6 +3442,23 @@ function ArchiveScreen({ session, musicMuted, musicReady, onToggleMusic, onSave,
           <small>{musicReady ? (musicMuted ? "当前已关闭，点击开启" : "根据剧情与战斗自动切换") : "音乐资源正在准备"}</small>
         </span>
         <span>{musicMuted ? "开启" : "关闭"}</span>
+      </button>
+
+      <button
+        className="audio-setting-button narration-setting-button"
+        type="button"
+        onClick={onToggleNarration}
+        aria-pressed={narrationEnabled}
+        disabled={!narrationSupported}
+      >
+        {narrationEnabled ? <ReaderIcon /> : <SpeakerOffIcon />}
+        <span>
+          <strong>自动语音旁白</strong>
+          <small>{narrationSupported
+            ? (narrationEnabled ? narrationStatusLabels[narrationStatus] : "当前已关闭，点击开启")
+            : "当前浏览器不支持系统语音"}</small>
+        </span>
+        <span>{narrationEnabled ? "关闭" : "开启"}</span>
       </button>
 
       <div className="achievement-heading">

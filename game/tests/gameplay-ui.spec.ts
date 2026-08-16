@@ -12,6 +12,8 @@ test("六武魂开局、世界支线与拍卖在手机尺寸可完整操作", as
   await page.reload();
 
   await page.getByRole("button", { name: "开始新的人生" }).click();
+  await expect(page.getByRole("heading", { name: "在你的命运开始之前" })).toBeVisible();
+  await page.getByRole("button", { name: "塑造我的身份" }).click();
   await expect(page.locator(".martial-soul-card")).toHaveCount(6);
   await page.getByRole("button", { name: /赤羽隼/ }).click();
   await page.getByRole("button", { name: "进入斗罗大陆" }).click();

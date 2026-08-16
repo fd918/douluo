@@ -34,7 +34,11 @@ async function main() {
     assert(isNonEmptyString(cue.file), `${cue.id} 缺少 file`);
     assert(!path.isAbsolute(cue.file), `${cue.id} 的 file 不能是绝对路径`);
     assert(!cue.file.split(/[\\/]/).includes(".."), `${cue.id} 的 file 不能越出音频目录`);
-    assert(path.extname(cue.file).toLowerCase() === ".ogg", `${cue.id} 必须引用 OGG 文件`);
+    const extension = path.extname(cue.file).toLowerCase();
+    assert(
+      cue.type === "loop" ? extension === ".ogg" : [".ogg", ".wav"].includes(extension),
+      `${cue.id} 的音频格式无效`,
+    );
 
     const resolvedFile = path.resolve(audioRoot, cue.file);
     assert(resolvedFile.startsWith(`${audioRoot}${path.sep}`), `${cue.id} 的文件路径无效`);
@@ -63,10 +67,10 @@ async function main() {
   }
 
   assert(loopCount === 8, `循环 BGM 数量应为 8，实际为 ${loopCount}`);
-  assert(stingerCount === 6, `短过场数量应为 6，实际为 ${stingerCount}`);
-  assert(ids.size === 14, `音乐总数应为 14，实际为 ${ids.size}`);
+  assert(stingerCount === 7, `短音效数量应为 7，实际为 ${stingerCount}`);
+  assert(ids.size === 15, `音乐总数应为 15，实际为 ${ids.size}`);
 
-  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短过场，音乐 ID 均唯一。`);
+  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效，音乐 ID 均唯一。`);
 }
 
 main().catch((error) => {
