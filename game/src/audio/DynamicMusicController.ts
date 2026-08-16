@@ -14,6 +14,7 @@ const DEFAULT_MANIFEST_URL = publicAssetUrl("audio/douluo/music_manifest.json");
 const DEFAULT_ASSET_BASE_URL = publicAssetUrl("audio/douluo/");
 const DEFAULT_STORAGE_KEY = "douluo.audio.settings.v1";
 const DEFAULT_STATE_DEBOUNCE_MS = 3_000;
+const AUDIO_UNLOCK_DATA_URL = "data:audio/wav;base64,UklGRuYAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgATElTVBoAAABJTkZPSVNGVA4AAABMYXZmNjIuMTIuMTAyAGRhdGGgAAAAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 const DEFAULT_SETTINGS: AudioSettings = {
   muted: false,
   masterVolume: 0.8,
@@ -202,12 +203,11 @@ export class DynamicMusicController {
     if (typeof Audio === "undefined" || this.loops.length === 0) return false;
 
     this.ensureChannels();
-    const firstUrl = this.getAssetUrl(this.loops[0].file);
     const elements = [...(this.bgmChannels ?? []), this.stingerChannel].filter(
       (audio): audio is HTMLAudioElement => Boolean(audio),
     );
     const attempts = elements.map((audio) => {
-      audio.src = firstUrl;
+      audio.src = AUDIO_UNLOCK_DATA_URL;
       audio.muted = true;
       audio.volume = 0;
       return audio.play();
@@ -217,6 +217,8 @@ export class DynamicMusicController {
     for (const audio of elements) {
       audio.pause();
       audio.currentTime = 0;
+      audio.removeAttribute("src");
+      audio.load();
       audio.muted = this.settings.muted;
     }
     if (!success) {

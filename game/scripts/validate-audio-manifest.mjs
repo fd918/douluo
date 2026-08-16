@@ -74,8 +74,14 @@ async function main() {
 
   await access(narrationManifestPath);
   const narrationManifest = JSON.parse(await readFile(narrationManifestPath, "utf8"));
+  assert(narrationManifest.version === 3, "narration manifest 必须使用双男声版本 3");
+  assert(narrationManifest.voices?.story?.voice === "zh-CN-YunxiNeural", "主旁白必须使用云希音色");
+  assert(narrationManifest.voices?.fate?.voice === "zh-CN-YunjianNeural", "命运之声必须使用云健音色");
+  assert(isNonEmptyString(narrationManifest.mastering), "沉浸旁白缺少人声母带说明");
+  assert(isNonEmptyString(narrationManifest.bgmStrategy) && narrationManifest.bgmStrategy.includes("不内置 BGM"), "旁白必须与游戏 BGM 分轨");
   assert(Array.isArray(narrationManifest.clips), "narration manifest.clips 必须是数组");
   const narrationIds = new Set();
+  const narrationRoles = { story: 0, fate: 0 };
   for (const [index, clip] of narrationManifest.clips.entries()) {
     const label = `第 ${index + 1} 段旁白`;
     assert(isNonEmptyString(clip.id), `${label}缺少 id`);
@@ -83,6 +89,10 @@ async function main() {
     narrationIds.add(clip.id);
     assert(isNonEmptyString(clip.text), `${clip.id} 缺少朗读文本`);
     assert(isNonEmptyString(clip.source), `${clip.id} 缺少剧情来源`);
+    assert(isNonEmptyString(clip.mix), `${clip.id} 缺少声音混合方式`);
+    assert(clip.role === "story" || clip.role === "fate", `${clip.id} 的旁白角色无效`);
+    narrationRoles[clip.role] += 1;
+    assert(clip.voice === narrationManifest.voices[clip.role].voice, `${clip.id} 的音色与旁白角色不一致`);
     assert(clip.file === `${clip.id}.mp3`, `${clip.id} 的文件名与 ID 不一致`);
     const resolvedFile = path.resolve(narrationRoot, clip.file);
     assert(resolvedFile.startsWith(`${narrationRoot}${path.sep}`), `${clip.id} 的文件路径无效`);
@@ -91,10 +101,14 @@ async function main() {
     assert(fileStats.isFile() && fileStats.size > 1000, `${clip.id} 的 MP3 文件为空或无效`);
   }
   assert(narrationIds.has("prologue"), "旁白包缺少世界序章");
+  const prologue = narrationManifest.clips.find((clip) => clip.id === "prologue");
+  assert(prologue?.role === "fate", "世界序章必须使用命运之声");
+  assert(narrationRoles.story > narrationRoles.fate, "主旁白段落数量必须多于命运之声");
+  assert(narrationRoles.fate >= 16 && narrationRoles.fate <= 32, `命运之声数量应保持克制，实际为 ${narrationRoles.fate}`);
   assert(narrationIds.has("timeline-restart"), "旁白包缺少时间线重启内容");
   assert(narrationIds.size === 96, `旁白总数应为 96，实际为 ${narrationIds.size}`);
 
-  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效、${narrationIds.size} 段兼容旁白。`);
+  console.log(`斗罗音频 manifest 校验通过：${loopCount} 条循环 BGM、${stingerCount} 条短音效、${narrationRoles.story} 段云希主旁白、${narrationRoles.fate} 段云健命运之声。`);
 }
 
 main().catch((error) => {

@@ -72,15 +72,15 @@ export const ALL_ENDINGS = [
   "潮汐远行者",
 ] as const;
 
-function buildSceneBridge(currentNode: StoryNode, nextNode: StoryNode) {
+export function buildSceneBridge(currentNode: StoryNode, nextNode: StoryNode) {
   if (nextNode.choices.length === 0) return "";
   if (currentNode.chapter !== nextNode.chapter) {
-    return `这条线索让时间线进入${nextNode.chapter}。${nextNode.season}，你来到${nextNode.location}，“${nextNode.title}”已经展开。眼下，你需要${nextNode.quest}。`;
+    return `命运，没有给你喘息的时间。${nextNode.season}，你抵达${nextNode.location}。故事，也翻开了新的篇章——${nextNode.chapter}。而“${nextNode.title}”，就此展开。摆在你面前的，是${nextNode.quest}。`;
   }
   if (currentNode.location !== nextNode.location) {
-    return `局势没有停下。${nextNode.season}，你转入${nextNode.location}，“${nextNode.title}”随之展开。接下来，你需要${nextNode.quest}。`;
+    return `局势仍在向前。${nextNode.season}，你转入${nextNode.location}。“${nextNode.title}”，随之展开。接下来，你必须${nextNode.quest}。`;
   }
-  return `局势随即进入“${nextNode.title}”。接下来，你需要${nextNode.quest}。`;
+  return `余波尚未散去，新的局面已经逼近。“${nextNode.title}”，随之展开。此刻，你必须${nextNode.quest}。`;
 }
 
 export const storyNodes: Record<string, StoryNode> = {

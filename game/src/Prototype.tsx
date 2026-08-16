@@ -23,11 +23,16 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, KeyboardInput, KeyboardTextarea, MobileScroll, useKeyboard } from "./mobile";
 import {
+  clearBrowserAiConfig,
   generateAiAction,
   generateAiDialogue,
   generateAiSummary,
+  loadBrowserAiConfig,
+  saveBrowserAiConfig,
+  testBrowserAiConfig,
   type AiActionResult,
   type AiDialogueResult,
+  type BrowserAiConfig,
 } from "./ai";
 import {
   ALL_ENDINGS,
@@ -1350,6 +1355,8 @@ export default function Prototype() {
   const [selectedWorldEvent, setSelectedWorldEvent] = useState<RandomSideEventDefinition | null>(null);
   const [worldThinking, setWorldThinking] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [browserAiConfig, setBrowserAiConfig] = useState<BrowserAiConfig>(loadBrowserAiConfig);
   const summaryAttemptKeyRef = useRef("");
   const lastNarrationKeyRef = useRef("");
   const game = session.game;
@@ -1388,9 +1395,10 @@ export default function Prototype() {
   const narration = useNarration();
 
   useEffect(() => {
-    music.setNarrationDucking(narration.status === "speaking");
+    const isSpeaking = narration.status === "speaking";
+    music.setNarrationDucking(isSpeaking, -9);
     return () => music.setNarrationDucking(false);
-  }, [music.setNarrationDucking, narration.status]);
+  }, [music.setNarrationDucking, narration.status, stage]);
 
   useEffect(() => {
     if (stage !== "game") return;
@@ -2372,6 +2380,8 @@ export default function Prototype() {
             {activeTab === "archive" ? (
               <ArchiveScreen
                 session={session}
+                aiEnabled={browserAiConfig.enabled}
+                aiModel={browserAiConfig.modelId}
                 musicMuted={music.muted}
                 musicReady={music.ready}
                 narrationEnabled={narration.enabled}
@@ -2379,6 +2389,10 @@ export default function Prototype() {
                 narrationSupported={narration.supported}
                 onToggleMusic={music.toggleMuted}
                 onToggleNarration={narration.toggleEnabled}
+                onOpenAiSettings={() => {
+                  keyboard.hide();
+                  setAiSettingsOpen(true);
+                }}
                 onSave={saveNow}
                 onRewind={rewindTo}
                 onReset={() => {
@@ -2437,6 +2451,19 @@ export default function Prototype() {
           <button className="confirm-reset-button" type="button" onClick={resetGame}>确认清除并重新创建</button>
           <button className="secondary-sheet-button" type="button" onClick={() => setResetConfirmOpen(false)}>取消，保留当前角色</button>
         </div>
+      </BottomSheet>
+
+      <BottomSheet
+        open={aiSettingsOpen}
+        onOpenChange={setAiSettingsOpen}
+        title="玩家自带 AI"
+        description="连接成功才启用；连接失败时游戏会自动使用本地剧情。"
+        snap={0.78}
+      >
+        <AiSettingsSheet
+          config={browserAiConfig}
+          onChange={setBrowserAiConfig}
+        />
       </BottomSheet>
 
       <BottomSheet
@@ -3423,6 +3450,8 @@ function CombatSheet({
 
 function ArchiveScreen({
   session,
+  aiEnabled,
+  aiModel,
   musicMuted,
   musicReady,
   narrationEnabled,
@@ -3430,11 +3459,14 @@ function ArchiveScreen({
   narrationSupported,
   onToggleMusic,
   onToggleNarration,
+  onOpenAiSettings,
   onSave,
   onRewind,
   onReset,
 }: {
   session: GameSession;
+  aiEnabled: boolean;
+  aiModel: string;
   musicMuted: boolean;
   musicReady: boolean;
   narrationEnabled: boolean;
@@ -3442,6 +3474,7 @@ function ArchiveScreen({
   narrationSupported: boolean;
   onToggleMusic: () => void;
   onToggleNarration: () => void;
+  onOpenAiSettings: () => void;
   onSave: () => void;
   onRewind: (nodeId: string) => void;
   onReset: () => void;
@@ -3492,6 +3525,20 @@ function ArchiveScreen({
         <span>{narrationEnabled ? "关闭" : "开启"}</span>
       </button>
 
+      <button
+        className={`audio-setting-button ai-setting-button${aiEnabled ? " connected" : ""}`}
+        type="button"
+        onClick={onOpenAiSettings}
+        aria-label="配置玩家自己的 AI 服务"
+      >
+        <MagicWandIcon />
+        <span>
+          <strong>玩家自带 AI</strong>
+          <small>{aiEnabled ? `已连接 ${aiModel}` : "未连接，当前使用本地剧情"}</small>
+        </span>
+        <span>设置</span>
+      </button>
+
       <div className="achievement-heading">
         <div><span className="section-kicker">命运印记</span><h2>成就图鉴</h2></div>
         <strong>{unlockedAchievements.length} / {ACHIEVEMENTS.length}</strong>
@@ -3532,5 +3579,124 @@ function ArchiveScreen({
       <article className="engine-card"><span className="engine-light" /><div><strong>本地规则引擎 · 完整状态存档</strong><p>剧情条件、已发现结局、角色属性、行囊、战斗结果和所有时间分支都会保存在当前设备。</p></div></article>
       <button className="danger-button" type="button" onClick={onReset}>重新创建角色</button>
     </section>
+  );
+}
+
+function AiSettingsSheet({
+  config,
+  onChange,
+}: {
+  config: BrowserAiConfig;
+  onChange: (config: BrowserAiConfig) => void;
+}) {
+  const keyboard = useKeyboard();
+  const [baseUrl, setBaseUrl] = useState(config.baseUrl);
+  const [modelId, setModelId] = useState(config.modelId);
+  const [apiKey, setApiKey] = useState(config.apiKey);
+  const [testing, setTesting] = useState(false);
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    setBaseUrl(config.baseUrl);
+    setModelId(config.modelId);
+    setApiKey(config.apiKey);
+  }, [config.apiKey, config.baseUrl, config.modelId]);
+
+  const saveAndTest = async () => {
+    keyboard.hide();
+    setTesting(true);
+    setFeedback(null);
+    const draft = saveBrowserAiConfig({ baseUrl, modelId, apiKey, enabled: false });
+    onChange(draft);
+    const result = await testBrowserAiConfig(draft);
+    const saved = saveBrowserAiConfig({
+      ...draft,
+      enabled: result.ok,
+      lastTestedAt: new Date().toISOString(),
+    });
+    onChange(saved);
+    setFeedback({ ok: result.ok, message: result.latencyMs ? `${result.message} · ${result.latencyMs}ms` : result.message });
+    setTesting(false);
+  };
+
+  const disableAi = () => {
+    keyboard.hide();
+    const cleared = clearBrowserAiConfig();
+    onChange(cleared);
+    setBaseUrl(cleared.baseUrl);
+    setModelId(cleared.modelId);
+    setApiKey("");
+    setFeedback({ ok: true, message: "AI 已关闭并清除本机密钥，游戏继续使用本地剧情" });
+  };
+
+  return (
+    <div className="ai-settings-sheet">
+      <div className={`ai-connection-status ${config.enabled ? "connected" : "local"}`} role="status">
+        <span aria-hidden="true" />
+        <div>
+          <strong>{config.enabled ? "AI 剧情已启用" : "本地剧情模式"}</strong>
+          <small>{config.enabled ? `${config.modelId} · 已通过连接测试` : "不填写也能完整游玩，AI 只负责剧情润色"}</small>
+        </div>
+      </div>
+
+      <label htmlFor="player-ai-url">API 地址</label>
+      <KeyboardInput
+        id="player-ai-url"
+        type="url"
+        inputMode="url"
+        value={baseUrl}
+        onChange={(event) => setBaseUrl(event.target.value)}
+        placeholder="https://服务商地址/v1"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      <label htmlFor="player-ai-model">模型 ID</label>
+      <KeyboardInput
+        id="player-ai-model"
+        value={modelId}
+        onChange={(event) => setModelId(event.target.value)}
+        placeholder="例如 agnes-2.5-flash"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      <label htmlFor="player-ai-key">API 密钥</label>
+      <KeyboardInput
+        id="player-ai-key"
+        type="password"
+        value={apiKey}
+        onChange={(event) => setApiKey(event.target.value)}
+        placeholder="仅保存在当前浏览器"
+        autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+
+      <p className="ai-privacy-note">密钥只存于这台设备的浏览器，不会写入游戏代码或 GitHub。使用公共电脑时，请在离开前清除密钥。</p>
+
+      {feedback ? (
+        <div className={feedback.ok ? "ai-test-feedback success" : "ai-test-feedback error"} role="status">
+          {feedback.ok ? <CheckCircledIcon /> : <ExclamationTriangleIcon />}
+          <span>{feedback.message}</span>
+        </div>
+      ) : null}
+
+      <button
+        className="primary-button ai-test-button"
+        type="button"
+        onClick={saveAndTest}
+        disabled={testing || !baseUrl.trim() || !modelId.trim() || !apiKey.trim()}
+      >
+        {testing ? <ReloadIcon className="spin-icon" /> : <MagicWandIcon />}
+        {testing ? "正在测试连接…" : "保存并测试连接"}
+      </button>
+      <button className="secondary-sheet-button" type="button" onClick={disableAi} disabled={testing}>
+        关闭 AI 并清除密钥
+      </button>
+    </div>
   );
 }
