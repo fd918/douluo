@@ -63,6 +63,8 @@ test("375px、小屏横屏、减少动态效果和大字体均不产生横向溢
   await expect(page.getByRole("button", { name: "开始新的人生" })).toBeVisible();
 
   await page.setViewportSize({ width: 844, height: 390 });
+  await page.reload();
+  await page.waitForTimeout(250);
   const landscapeLayout = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth - innerWidth,
     height: document.querySelector<HTMLElement>('[data-testid="device-screen"]')?.getBoundingClientRect().height,
