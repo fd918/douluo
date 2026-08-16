@@ -1,6 +1,26 @@
+# macOS 与编辑器临时文件
+.DS_Store
+*.swp
+*.log
+
+# JavaScript / TypeScript 依赖、构建与测试产物
 node_modules/
 dist/
 test-results/
 playwright-report/
-.env.local
-.env.*.local
+coverage/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 本地环境变量与敏感配置
+.env
+.env.*
+!.env.example
+!**/.env.example
+.secrets/
+secrets/
+credentials/
+*.secret
+
