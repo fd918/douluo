@@ -101,15 +101,18 @@ function getProviderConfig(env, prefix, label) {
   return { baseUrl, model, apiKey, timeoutMs, label };
 }
 
-function getConfig(env) {
-  const providers = [
+function getConfig(env, providerOverride = null, settingsOverride = null) {
+  const environmentProviders = [
     getProviderConfig(env, "AI_", "primary"),
     getProviderConfig(env, "AI_FALLBACK_", "fallback"),
   ].filter((provider) => provider.baseUrl && provider.model && provider.apiKey && isValidBaseUrl(provider.baseUrl));
+  const providers = Array.isArray(providerOverride)
+    ? providerOverride.filter((provider) => provider.baseUrl && provider.model && provider.apiKey && isValidBaseUrl(provider.baseUrl))
+    : environmentProviders;
   return {
     providers,
-    requestsPerMinute: clampInteger(env?.AI_REQUESTS_PER_MINUTE, 1, 120, DEFAULT_REQUESTS_PER_MINUTE),
-    dailyRequestLimit: clampInteger(env?.AI_DAILY_REQUEST_LIMIT, 1, 5000, DEFAULT_DAILY_REQUEST_LIMIT),
+    requestsPerMinute: clampInteger(settingsOverride?.requestsPerMinute ?? env?.AI_REQUESTS_PER_MINUTE, 1, 120, DEFAULT_REQUESTS_PER_MINUTE),
+    dailyRequestLimit: clampInteger(settingsOverride?.dailyRequestLimit ?? env?.AI_DAILY_REQUEST_LIMIT, 1, 100000, DEFAULT_DAILY_REQUEST_LIMIT),
   };
 }
 
@@ -133,7 +136,7 @@ function getProviderPublicInfo(provider) {
   return {
     role: provider.label,
     model: provider.model,
-    provider: new URL(provider.baseUrl).host,
+    provider: provider.name || new URL(provider.baseUrl).host,
   };
 }
 
@@ -505,6 +508,7 @@ function normalizeOutput(schema, value, rawContent, worldLimits = null) {
 async function callProvider(config, prompt, fetchImpl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  const startedAt = Date.now();
   const generationOptions = prompt.schema === "dialogue"
     ? { temperature: 0.55, maxTokens: 360 }
     : prompt.schema === "summary"
@@ -571,6 +575,8 @@ async function callProvider(config, prompt, fetchImpl) {
             totalTokens: clampInteger(result?.usage?.total_tokens, 0, 1000000, 0),
           },
         },
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
       };
     }
     const error = new Error("AI_PROVIDER_ERROR");
@@ -581,9 +587,9 @@ async function callProvider(config, prompt, fetchImpl) {
   }
 }
 
-export async function handleAiRequest(request, env, fetchImpl = fetch) {
+export async function handleAiRequest(request, env, fetchImpl = fetch, options = {}) {
   const url = new URL(request.url);
-  const config = getConfig(env);
+  const config = getConfig(env, options.providers, options.settings);
 
   if (url.pathname === AI_STATUS_PATH && request.method === "GET") {
     const primary = config.providers[0] ?? null;
@@ -637,11 +643,44 @@ export async function handleAiRequest(request, env, fetchImpl = fetch) {
 
   try {
     let lastError;
-    for (const provider of config.providers) {
+    for (let index = 0; index < config.providers.length; index += 1) {
+      const provider = config.providers[index];
+      const startedAt = Date.now();
       try {
         const result = await callProvider(provider, prompt, fetchImpl);
+        if (options.onAttempt) {
+          await Promise.resolve(options.onAttempt({
+            requestKind: body.kind,
+            provider,
+            success: true,
+            statusCode: result.statusCode,
+            promptTokens: result.meta.usage.promptTokens,
+            completionTokens: result.meta.usage.completionTokens,
+            totalTokens: result.meta.usage.totalTokens,
+            modelId: result.meta.model,
+            latencyMs: result.latencyMs,
+            attemptNo: index + 1,
+            fallbackUsed: index > 0,
+          })).catch(() => {});
+        }
         return jsonResponse({ ok: true, ...result });
       } catch (error) {
+        if (options.onAttempt) {
+          await Promise.resolve(options.onAttempt({
+            requestKind: body.kind,
+            provider,
+            success: false,
+            statusCode: error?.status ?? 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            latencyMs: Date.now() - startedAt,
+            attemptNo: index + 1,
+            fallbackUsed: index > 0,
+            errorCode: error?.message || "AI_PROVIDER_ERROR",
+            errorMessage: error?.name === "AbortError" ? "AI 服务响应超时" : "AI 服务暂时不可用",
+          })).catch(() => {});
+        }
         lastError = error;
       }
     }

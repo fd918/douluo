@@ -12,7 +12,7 @@
     "test:world": "node --experimental-strip-types --test tests/world-director.test.mjs",
     "test:content": "node --experimental-strip-types --test tests/douluo-world-content.test.mjs",
     "test:gameplay": "node --experimental-strip-types --test tests/gameplay-rules.test.mjs",
-    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:sites": "node --test tests/sites-worker.test.mjs tests/ai-ops-cloud.test.mjs",
     "verify": "npm run check:runtime && npm run test:audio && npm run test:story && npm run test:content && npm run test:gameplay && npm run test:world && npm run test:sites && npm run build",
     "build:pages": "npm run check:runtime && GITHUB_PAGES=1 tsc && GITHUB_PAGES=1 vite build",
     "predev": "npm run check:runtime",
