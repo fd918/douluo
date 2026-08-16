@@ -509,7 +509,7 @@ async function callProvider(config, prompt, fetchImpl) {
     ? { temperature: 0.55, maxTokens: 360 }
     : prompt.schema === "summary"
       ? { temperature: 0.25, maxTokens: 520 }
-      : { temperature: 0.65, maxTokens: prompt.worldMode ? 560 : 480 };
+      : { temperature: 0.65, maxTokens: prompt.worldMode ? 900 : 480 };
   const basePayload = {
     model: config.model,
     messages: [

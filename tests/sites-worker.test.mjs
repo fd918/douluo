@@ -392,7 +392,7 @@ test("world director mode requests a short response and clamps generated effects
   const result = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(providerBody.max_tokens, 560);
+  assert.equal(providerBody.max_tokens, 900);
   assert.equal(result.data.worldDirective.reputationDelta, 6);
   assert.equal(result.data.worldDirective.coinDelta, 30);
   assert.equal(result.data.worldDirective.experienceDelta, 240);
