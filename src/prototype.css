@@ -244,6 +244,17 @@ button {
   line-height: 1.65;
 }
 
+.canon-mode-card {
+  margin: -10px 0 22px;
+  padding: 14px 15px;
+  border: 1px solid rgba(230, 189, 104, 0.42);
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(230, 189, 104, 0.1), rgba(88, 216, 239, 0.06));
+}
+
+.canon-mode-card strong { color: #f1d796; font-family: "Noto Serif SC", serif; font-size: 14px; }
+.canon-mode-card p { margin: 6px 0 0; color: #aab9c8; font-size: 11px; line-height: 1.7; }
+
 .field-label,
 .choice-fieldset legend,
 .custom-action-sheet label,
@@ -357,6 +368,30 @@ button {
   margin-top: 28px;
 }
 
+.creation-detail-grid .talent-chip { padding: 7px 9px; font-size: 11px; line-height: 1.4; }
+.creation-goal-grid { display: grid; gap: 8px; }
+.goal-card,
+.pace-card {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid rgba(148, 165, 187, 0.22);
+  border-radius: 11px;
+  color: #cbd4df;
+  text-align: left;
+  background: #0b192b;
+}
+.goal-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; }
+.goal-card svg { flex: 0 0 auto; color: var(--gold); }
+.goal-card.selected,
+.pace-card.selected { border-color: var(--gold); color: #f0d99f; background: #182238; box-shadow: inset 0 0 20px rgba(230, 189, 104, 0.08); }
+.creation-secret.text-field { min-height: 84px; height: auto; padding: 12px 15px; resize: vertical; line-height: 1.65; }
+.pace-grid { display: grid; gap: 8px; }
+.pace-card { padding: 10px 13px; }
+.pace-card strong,
+.pace-card small { display: block; }
+.pace-card strong { font-size: 12px; }
+.pace-card small { margin-top: 4px; color: #8293a6; font-size: 9px; line-height: 1.5; }
+
 .location-bar,
 .page-title {
   min-height: 48px;
@@ -400,6 +435,20 @@ button {
 .story-audio-toggle:active { background: rgba(88, 216, 239, 0.12); transform: scale(0.96); }
 .story-audio-toggle:disabled { color: #53697c; opacity: 0.6; }
 
+.canon-anchor-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 11px 14px;
+  border-right: 1px solid rgba(230, 189, 104, 0.34);
+  border-left: 1px solid rgba(230, 189, 104, 0.34);
+  color: #e9d49f;
+  background: linear-gradient(90deg, rgba(230, 189, 104, 0.1), rgba(88, 216, 239, 0.06));
+}
+.canon-anchor-card span { grid-column: 1 / -1; color: #78d9e8; font-size: 9px; letter-spacing: 0.12em; }
+.canon-anchor-card strong { font-family: "Noto Serif SC", serif; font-size: 11px; line-height: 1.55; }
+.canon-anchor-card small { align-self: center; color: #8fa0b1; font-size: 9px; white-space: nowrap; }
+
 .story-art {
   height: 248px;
   overflow: hidden;
@@ -436,6 +485,20 @@ button {
   line-height: 1.9;
   white-space: pre-line;
 }
+
+.scene-dialogue {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(169, 133, 255, 0.26);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(27, 23, 50, 0.72), rgba(8, 23, 39, 0.94));
+}
+.scene-dialogue header { display: flex; align-items: center; gap: 6px; color: #cbb2f3; font-size: 9px; letter-spacing: 0.12em; }
+.scene-dialogue > div { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: start; }
+.scene-dialogue strong { padding-top: 2px; color: #f0d695; font-size: 10px; text-align: right; }
+.scene-dialogue p { margin: 0; padding: 8px 10px; border-radius: 9px; color: #dce4ec; background: rgba(10, 28, 46, 0.82); font-family: "Noto Serif SC", serif; font-size: 11px; line-height: 1.7; }
 
 .narrative-heading {
   min-height: 44px;
@@ -575,6 +638,26 @@ textarea:focus-visible {
   display: block;
   margin: 0;
 }
+
+.note-card small { display: block; margin-top: 6px; color: #72879a; font-size: 9px; line-height: 1.55; }
+
+.journey-recap {
+  margin-top: 14px;
+  border: 1px solid rgba(230, 189, 104, 0.22);
+  border-radius: 11px;
+  background: #091727;
+}
+.journey-recap summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 13px; color: #dec58b; cursor: pointer; font-size: 11px; list-style: none; }
+.journey-recap summary::-webkit-details-marker { display: none; }
+.journey-recap summary span { color: #72869a; font-size: 9px; }
+.journey-recap > div { display: grid; gap: 7px; padding: 0 10px 10px; }
+.journey-recap article { padding: 9px 10px; border-radius: 8px; background: rgba(14, 33, 53, 0.85); }
+.journey-recap article strong,
+.journey-recap article p,
+.journey-recap article small { display: block; margin: 0; }
+.journey-recap article strong { color: #9bdfe8; font-size: 10px; }
+.journey-recap article p { margin-top: 3px; color: #e3d2a9; font-size: 10px; }
+.journey-recap article small { margin-top: 3px; color: #7f91a4; font-size: 9px; line-height: 1.45; }
 
 .note-card p {
   margin-top: 4px;
@@ -1789,6 +1872,10 @@ textarea:focus-visible {
 .martial-soul-glyph.兽 { border-color: rgba(230, 189, 104, 0.55); color: #efd492; }
 .martial-soul-glyph.无 { border-color: rgba(169, 133, 255, 0.55); color: #c9adff; }
 .spirit-mark .martial-soul-glyph, .combat-avatar .martial-soul-glyph { width: 100%; height: 100%; }
+.empty-soul-ring { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px dashed rgba(169, 133, 255, 0.35); border-radius: 11px; background: rgba(19, 23, 45, 0.55); }
+.empty-soul-ring .ring-orb { flex: 0 0 auto; opacity: 0.42; }
+.empty-soul-ring strong { color: #d9c7ef; font-size: 12px; }
+.empty-soul-ring p { margin: 4px 0 0; color: #7f90a5; font-size: 9px; line-height: 1.55; }
 
 .world-director-card, .faction-panel, .world-contacts-panel { margin-top: 12px; padding: 14px; border: 1px solid rgba(88, 216, 239, 0.25); border-radius: 12px; background: linear-gradient(145deg, rgba(12, 31, 51, 0.96), rgba(7, 19, 33, 0.96)); }
 .world-director-card header, .faction-panel > header, .world-contacts-panel > header { display: flex; align-items: center; justify-content: space-between; color: #75d9e8; font-size: 10px; }

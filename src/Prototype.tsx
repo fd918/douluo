@@ -36,7 +36,10 @@ import {
 } from "./ai";
 import {
   ALL_ENDINGS,
+  CANON_START_NODE_ID,
+  formatStoryText,
   getDefaultCustomChoice,
+  getStoryIntro,
   getStoryNode,
   resolveStoryChoice,
   type StoryHistoryEntry,
@@ -46,7 +49,6 @@ import { useNarration, type NarrationStatus } from "./audio/useNarration";
 import {
   PROLOGUE_NARRATION,
   PROLOGUE_PARAGRAPHS,
-  buildOpeningNarration,
   narrationClipUrl,
 } from "./narrationContent";
 import { publicAssetUrl } from "./publicAsset";
@@ -186,6 +188,12 @@ type GameState = {
   name: string;
   identity: string;
   talent: string;
+  storyMode: "canon" | "legacy";
+  narrativePace: "immersive" | "standard" | "fast";
+  originPlace: string;
+  background: string;
+  lifeGoal: string;
+  secret: string;
   soulPower: number;
   soulProgress: number;
   coins: number;
@@ -532,11 +540,17 @@ const SECOND_SOUL_RINGS: Record<string, SoulRing> = {
 const FACTION_IDS = FACTIONS.map((faction) => faction.id);
 
 const initialGame: GameState = {
-  name: "唐三",
+  name: "无名",
   identity: "原创角色",
   talent: "天才档",
-  soulPower: 12,
-  soulProgress: 1250,
+  storyMode: "canon",
+  narrativePace: "immersive",
+  originPlace: "法斯诺行省边缘村落",
+  background: "普通家庭",
+  lifeGoal: "与伙伴同行，也走出自己的道路",
+  secret: "",
+  soulPower: 10,
+  soulProgress: 0,
   coins: 18,
   turns: 0,
   rewinds: 3,
@@ -547,15 +561,15 @@ const initialGame: GameState = {
   npcActionLog: [],
   pendingNpcAction: null,
   recentRelationChange: null,
-  location: "诺丁城",
-  season: "三月·午后",
+  location: "法斯诺行省边缘村落",
+  season: "斗罗历二六三七年 · 初春清晨",
   narrative:
-    "武魂觉醒后的第三天，你带着学院推荐信来到诺丁城。铁匠铺的敲击声隔着两条巷子传来，雨后的青石路上留着一串泛着蓝光的新鲜脚印。你原本只想完成入学报到，却在这一刻被卷入了另一条命运。",
-  note: "发光的脚印不像普通行人留下的，附近似乎残留着植物系魂力。",
+    "六岁的春天，村口铜钟正在召集参加武魂觉醒的孩子。与此同时，圣魂村的唐三也将走进觉醒法阵。你们尚未相识，同一个时代已经开始转动。",
+  note: "原著同行模式：重大事件遵循原著时间线，你拥有独立身份、关系与人生结局。",
   martialSoul: "蓝银草",
   martialSoulId: "blue-silver-grass",
   martialAttribute: "植物",
-  currentHp: 152,
+  currentHp: 140,
   victories: 0,
   inventory: {
     academy_letter: 1,
@@ -565,17 +579,17 @@ const initialGame: GameState = {
     apprentice_guard: 1,
   },
   equipment: { 护具: null, 饰品: null },
-  soulRings: [FIRST_SOUL_RING],
-  currentStoryNodeId: "notting_street",
+  soulRings: [],
+  currentStoryNodeId: CANON_START_NODE_ID,
   storyFlags: [],
   storyHistory: [],
   completedEndings: [],
   storyCycle: 1,
-  lastStoryChange: "新的时间线已经开启",
+  lastStoryChange: "原著同行时间线已经开启",
   storyNarrative:
-    "武魂觉醒后的第三天，你带着学院推荐信来到诺丁城。铁匠铺的敲击声隔着两条巷子传来，雨后的青石路上留着一串泛着蓝光的新鲜脚印。你原本只想完成入学报到，却在这一刻被卷入了另一条命运。",
-  storyNarrationClipId: "opening-blue-silver-grass",
-  storyNote: "脚印边缘残留着植物系魂力，这不是普通行人留下的痕迹。",
+    "六岁的春天，村口铜钟正在召集参加武魂觉醒的孩子。与此同时，圣魂村的唐三也将走进觉醒法阵。你们尚未相识，同一个时代已经开始转动。",
+  storyNarrationClipId: null,
+  storyNote: "原著时期：圣魂村武魂觉醒日前后。你将作为独立角色进入同一条时间线。",
   storySummary: "",
   storySummaryThroughTurn: 0,
   worldDirector: createInitialWorldDirectorState(FACTION_IDS),
@@ -597,12 +611,12 @@ const locations: WorldLocation[] = [
     distance: "城内通行",
     travelTime: "片刻",
     risk: "低",
-    description: "初级魂师学院与铁匠铺坐落于此。城外商路平稳，适合调查线索和补充物资。",
-    arrival: "你重新踏上诺丁城的青石路。铁匠铺的敲击声依旧规律，学院后门那缕植物系魂力却比离开前更清晰了。",
-    note: "已返回诺丁城。学院后门与铁匠铺仍有未完成的线索。",
+    description: "初级魂师学院与铁匠铺坐落于此。这里承载着工读生活、基础理论、日常修炼和少年魂师最初的友情。",
+    arrival: "你踏上诺丁城的青石路。铁匠铺的敲击声与学院钟声交错传来，工读生们正为新一天的课程和杂务奔忙。",
+    note: "已抵达诺丁城。自由探索不会跳过当前原著主线，可随时返回剧情继续推进。",
     season: "三月·午后",
-    questTitle: "调查发光脚印的线索",
-    questDescription: "学院后门残留着植物系魂力，继续追踪可能遇到陌生魂师。",
+    questTitle: "体验诺丁学院的日常",
+    questDescription: "完成课程、工读与基础训练，逐步认识唐三、小舞、大师和七舍伙伴。",
   },
   {
     id: "shrek-academy",
@@ -633,8 +647,8 @@ const locations: WorldLocation[] = [
     arrival: "参天古木遮住天光，潮湿空气里混杂着草木与魂兽的气息。远处灌木忽然晃动，一双幽蓝眼睛在阴影里一闪而过。",
     note: "已进入星斗大森林外围。不要独自深入，附近可能有适合魂师历练的百年魂兽。",
     season: "三月·清晨",
-    questTitle: "寻找植物系魂兽踪迹",
-    questDescription: "辨认外围魂兽活动痕迹，在不惊动高阶魂兽的前提下继续探索。",
+    questTitle: "辨认魂兽与环境痕迹",
+    questDescription: "在不惊动高阶魂兽的前提下探索外围，并根据自己的武魂定位判断是否适合交战。",
   },
   {
     id: "sea-god-island",
@@ -748,10 +762,10 @@ type NpcActionResponse = {
 };
 
 const npcActionTemplates: NpcActionTemplate[] = [
-  { id: "xiao-wu-visit", characterId: "xiao-wu", kind: "visit", minTurn: 1, title: "小舞找到了你", narrative: "你刚把线索整理好，小舞便从学院方向追了过来。她想亲口问问你刚才经历的事。", reason: "小舞好感达到 30，且你已经留下第一段可追踪经历。" },
-  { id: "dai-mubai-conflict", characterId: "dai-mubai", kind: "conflict", minTurn: 2, title: "戴沐白拦住去路", narrative: "戴沐白听说了你最近的行动。他挡在路中央，直言真正的线索不该交给一个尚未证明实力的人。", reason: "戴沐白对你的了解仍少于 25，好胜心让他选择正面试探。" },
-  { id: "ning-rongrong-romance", characterId: "ning-rongrong", kind: "romance", minTurn: 3, title: "宁荣荣的含蓄邀约", narrative: "夜色落下后，宁荣荣送来一张短笺。等你赴约，她故作随意地问：以后的调查，能不能也算她一份？", reason: "宁荣荣好感达到 40，共同经历让她愿意主动靠近。" },
-  { id: "oscar-quest", characterId: "oscar", kind: "quest", minTurn: 4, title: "奥斯卡带来委托", narrative: "奥斯卡抱着封好的木匣赶来。他记得你擅长从细节找线索，想请你一起把木匣送到药草园。", reason: "你已经积累多段人物记忆，奥斯卡判断你适合处理这项委托。" },
+  { id: "xiao-wu-visit", characterId: "xiao-wu", kind: "visit", minTurn: 1, title: "小舞约你晚间训练", narrative: "七舍安静下来后，小舞抱着训练用的护具来找你。她想知道你是否愿意把白天没完成的配合再练一次。", reason: "你已经在诺丁学院与小舞相识，且此前的选择让她愿意主动靠近。" },
+  { id: "dai-mubai-conflict", characterId: "dai-mubai", kind: "conflict", minTurn: 2, title: "戴沐白要求再试一次", narrative: "戴沐白在训练场拦住你，直言一次入学考核不足以证明默契。他提出重新模拟赵无极试炼中的一次失误。", reason: "你已经进入史莱克，但戴沐白仍想确认你在真正压力下是否可靠。" },
+  { id: "ning-rongrong-romance", characterId: "ning-rongrong", kind: "romance", minTurn: 3, title: "宁荣荣的赛后邀约", narrative: "夜色落下后，宁荣荣送来一张短笺。她邀请你一起复盘团战，还特意在末尾补了一句：不要带其他人。", reason: "多次团队经历让宁荣荣愿意与你分享不对所有人公开的想法。" },
+  { id: "oscar-quest", characterId: "oscar", kind: "quest", minTurn: 4, title: "奥斯卡来核对远行补给", narrative: "奥斯卡抱着写满数字的补给册来找你。他想请你一起检查下一次森林行动需要的食物、药品和撤退余量。", reason: "你已经成为史莱克队伍的一员，奥斯卡相信你会认真对待后勤。" },
 ];
 
 const npcActionResponses: Record<NpcActionId, [NpcActionResponse, NpcActionResponse]> = {
@@ -910,11 +924,25 @@ function chooseMemoryWitness(text: string, relationships: Record<CharacterId, nu
   )).id;
 }
 
+const canonNpcMinimumScene: Partial<Record<NpcActionId, number>> = {
+  "xiao-wu-visit": 6,
+  "dai-mubai-conflict": 25,
+  "ning-rongrong-romance": 33,
+  "oscar-quest": 27,
+};
+
+function isNpcActionChronologicallyAvailable(game: GameState, actionId: NpcActionId) {
+  if (game.storyMode !== "canon") return true;
+  const sceneIndex = getStoryNode(game).sceneIndex ?? Number.POSITIVE_INFINITY;
+  return sceneIndex >= (canonNpcMinimumScene[actionId] ?? 1);
+}
+
 function selectNpcAction(game: GameState) {
   if (game.pendingNpcAction) return game.pendingNpcAction;
   const completed = new Set(game.npcActionLog.map((action) => action.actionId));
   const eligible = npcActionTemplates.find((action) => {
     if (completed.has(action.id) || game.turns < action.minTurn) return false;
+    if (!isNpcActionChronologicallyAvailable(game, action.id)) return false;
     if (action.id === "xiao-wu-visit") return game.relationships["xiao-wu"] >= 30;
     if (action.id === "dai-mubai-conflict") return game.relationships["dai-mubai"] < 25;
     if (action.id === "ning-rongrong-romance") return game.relationships["ning-rongrong"] >= 40;
@@ -977,9 +1005,13 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     typeof value?.storyNarrative === "string" &&
     Array.isArray(value?.storyHistory) &&
     typeof value?.currentStoryNodeId === "string";
+  const storyMode = value?.storyMode
+    ?? (value?.currentStoryNodeId?.startsWith("canon_") ? "canon" : value?.currentStoryNodeId ? "legacy" : "canon");
   const merged: GameState = {
     ...initialGame,
     ...value,
+    storyMode,
+    narrativePace: value?.narrativePace ?? "immersive",
     martialSoulId,
     inventory: { ...initialGame.inventory, ...(value?.inventory ?? {}) },
     equipment: { ...initialGame.equipment, ...(value?.equipment ?? {}) },
@@ -991,7 +1023,7 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
       ? value.pendingNpcAction
       : null,
     recentRelationChange: value?.recentRelationChange ?? null,
-    soulRings: Array.isArray(value?.soulRings) && value.soulRings.length > 0 ? value.soulRings : initialGame.soulRings,
+    soulRings: Array.isArray(value?.soulRings) ? value.soulRings : initialGame.soulRings,
     storyFlags: Array.isArray(value?.storyFlags) ? value.storyFlags : [],
     storyHistory: Array.isArray(value?.storyHistory) ? value.storyHistory : [],
     completedEndings: Array.isArray(value?.completedEndings) ? value.completedEndings : [],
@@ -1012,7 +1044,10 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     claimedRewardIds: Array.isArray(value?.claimedRewardIds) ? value.claimedRewardIds : [],
   };
   const maxHp = getStats(merged).maxHp;
-  return { ...merged, currentHp: Math.max(1, Math.min(merged.currentHp || maxHp, maxHp)) };
+  const hydrated = { ...merged, currentHp: Math.max(1, Math.min(merged.currentHp || maxHp, maxHp)) };
+  return hydrated.pendingNpcAction && !isNpcActionChronologicallyAvailable(hydrated, hydrated.pendingNpcAction)
+    ? { ...hydrated, pendingNpcAction: null }
+    : hydrated;
 }
 
 function createSession(game: GameState, title = "进入诺丁城"): GameSession {
@@ -1121,18 +1156,43 @@ function updateInventory(game: GameState, itemId: string, delta: number): GameSt
   return { ...game, inventory: { ...game.inventory, [itemId]: quantity } };
 }
 
+function createMilestoneSoulRing(game: GameState, order: 1 | 2): SoulRing {
+  const soul = getMartialSoul(game.martialSoulId) ?? MARTIAL_SOULS[0];
+  if (order === 1) {
+    return {
+      id: `${soul.id}-first-ring`,
+      name: `百年${soul.name}魂环`,
+      age: 420,
+      attribute: soul.attribute,
+      skillName: soul.initialSkill.name,
+      skillDescription: soul.initialSkill.description,
+    };
+  }
+  return {
+    id: `${soul.id}-second-ring`,
+    name: `千年${soul.name}魂环`,
+    age: 1180,
+    attribute: soul.attribute,
+    skillName: `${soul.name}·进阶魂技`,
+    skillDescription: `沿${soul.role}方向深化${soul.name}的能力，并能与史莱克伙伴形成稳定配合。`,
+  };
+}
+
 function applyStoryChoice(game: GameState, choiceId: string, customAction?: string): GameState {
   const resolution = resolveStoryChoice(game, choiceId, customAction);
   if (!resolution) return game;
+  const currentNode = getStoryNode(game);
+  const selectedChoice = currentNode.choices.find((choice) => choice.id === choiceId);
   const destination = getStoryNode({ ...game, currentStoryNodeId: resolution.nextNodeId });
   const relationship = Math.max(0, Math.min(100, game.relationship + resolution.relationship));
-  const xiaoWuScore = Math.max(0, Math.min(100, game.relationships["xiao-wu"] + resolution.relationship));
+  const witnessId = chooseMemoryWitness(`${currentNode.title}${selectedChoice?.label ?? ""}${resolution.narrative}`, game.relationships);
+  const witnessScore = Math.max(0, Math.min(100, game.relationships[witnessId] + resolution.relationship));
   let next: GameState = {
     ...game,
     turns: game.turns + 1,
     coins: Math.max(0, game.coins + resolution.coins),
     relationship,
-    relationships: { ...game.relationships, "xiao-wu": xiaoWuScore },
+    relationships: { ...game.relationships, [witnessId]: witnessScore },
     currentStoryNodeId: resolution.nextNodeId,
     storyFlags: resolution.flags,
     storyHistory: [...game.storyHistory, resolution.historyEntry],
@@ -1141,14 +1201,34 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
         ? [...game.completedEndings, resolution.endingName]
         : game.completedEndings,
     lastStoryChange: resolution.lastChange,
-    location: destination.location,
+    location: formatStoryText(destination.location, game),
     season: destination.season,
     narrative: resolution.narrative,
     note: resolution.note,
     storyNarrative: resolution.narrative,
-    storyNarrationClipId: customAction ? null : `story-${game.currentStoryNodeId}-${choiceId}`,
+    storyNarrationClipId: game.storyMode === "canon" || customAction ? null : `story-${game.currentStoryNodeId}-${choiceId}`,
     storyNote: resolution.note,
   };
+  if (next.storyMode === "canon" && resolution.flags.includes("第一魂环已吸收") && next.soulRings.length === 0) {
+    const firstRing = createMilestoneSoulRing(next, 1);
+    next = {
+      ...next,
+      soulRings: [firstRing],
+      lastStoryChange: `第一魂环觉醒 · ${firstRing.skillName}`,
+    };
+  }
+  if (next.storyMode === "canon" && resolution.flags.includes("第二魂环已吸收") && next.soulRings.length < 2) {
+    const secondRing = createMilestoneSoulRing(next, 2);
+    next = {
+      ...next,
+      soulRings: [...next.soulRings, secondRing],
+      inventory: {
+        ...next.inventory,
+        millennium_essence: (next.inventory.millennium_essence ?? 0) + 1,
+      },
+      lastStoryChange: `第二魂环觉醒 · ${secondRing.skillName}`,
+    };
+  }
   const secondRingFlag = Object.keys(SECOND_SOUL_RINGS).find((flag) => resolution.flags.includes(flag));
   if (secondRingFlag && next.soulRings.length < 2) {
     next = {
@@ -1169,6 +1249,13 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
 }
 
 function isLocationUnlocked(location: WorldLocation, game: GameState) {
+  if (game.storyMode === "canon") {
+    const sceneIndex = getStoryNode(game).sceneIndex ?? 1;
+    if (location.id === "notting-city") return sceneIndex >= 4;
+    if (location.id === "shrek-academy") return sceneIndex >= 22;
+    if (location.id === "star-forest") return sceneIndex >= 34;
+    if (location.id === "sea-god-island") return sceneIndex >= 56;
+  }
   return location.unlocked || (
     location.id === "sea-god-island" &&
     (game.storyFlags.includes("获得瀚海航图") || game.location === "海神岛")
@@ -1340,6 +1427,11 @@ export default function Prototype() {
   const [name, setName] = useState("");
   const [identity, setIdentity] = useState("原创角色");
   const [talent, setTalent] = useState("天才档");
+  const [originPlace, setOriginPlace] = useState("法斯诺行省边缘村落");
+  const [background, setBackground] = useState("普通家庭");
+  const [lifeGoal, setLifeGoal] = useState("与伙伴同行，也走出自己的道路");
+  const [secret, setSecret] = useState("");
+  const [narrativePace, setNarrativePace] = useState<GameState["narrativePace"]>("immersive");
   const [selectedMartialSoulId, setSelectedMartialSoulId] = useState<MartialSoulId>("blue-silver-grass");
   const [customOpen, setCustomOpen] = useState(false);
   const [customAction, setCustomAction] = useState("");
@@ -1498,34 +1590,41 @@ export default function Prototype() {
 
   const beginGame = () => {
     const martialSoul = getMartialSoul(selectedMartialSoulId) ?? MARTIAL_SOULS[0];
-    const firstRing: SoulRing = selectedMartialSoulId === "blue-silver-grass" ? FIRST_SOUL_RING : {
-      id: `${martialSoul.id}-centennial`,
-      name: `百年${martialSoul.name}魂环`,
-      age: 410,
-      attribute: martialSoul.attribute,
-      skillName: martialSoul.initialSkill.name,
-      skillDescription: martialSoul.initialSkill.description,
-    };
-    const openingNarration = buildOpeningNarration(martialSoul);
-    const base = {
+    const base: GameState = {
       ...initialGame,
       name: name.trim() || "无名",
       identity,
       talent,
+      storyMode: "canon",
+      narrativePace,
+      originPlace,
+      background,
+      lifeGoal,
+      secret: secret.trim(),
       martialSoulId: martialSoul.id,
       martialSoul: martialSoul.name,
       martialAttribute: martialSoul.attribute,
-      soulRings: [firstRing],
-      narrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}三天后，你带着学院推荐信来到诺丁城。雨后的青石路上，一串泛着蓝光的脚印正通向学院后门。`,
-      storyNarrative: openingNarration,
-      storyNarrationClipId: `opening-${martialSoul.id}`,
-      storyNote: `${martialSoul.identity} · 初始魂技：${martialSoul.initialSkill.name}`,
+      soulRings: [],
+      currentStoryNodeId: CANON_START_NODE_ID,
+      storyNarrationClipId: null,
     };
-    const nextGame = { ...base, currentHp: getStats(base).maxHp };
+    const openingNarration = getStoryIntro(base);
+    const openingNode = getStoryNode(base);
+    const nextGame: GameState = {
+      ...base,
+      currentHp: getStats(base).maxHp,
+      location: formatStoryText(openingNode.location, base),
+      season: openingNode.season,
+      narrative: openingNarration,
+      storyNarrative: openingNarration,
+      note: formatStoryText(openingNode.timelineNote ?? openingNode.quest, base),
+      storyNote: formatStoryText(openingNode.canonAnchor ?? openingNode.quest, base),
+      lastStoryChange: `原著同行 · ${originPlace} · ${background}`,
+    };
     keyboard.hide();
     setSession(createSession(nextGame));
     lastNarrationKeyRef.current = `${nextGame.currentStoryNodeId}:${nextGame.storyNarrative}`;
-    narration.speak(openingNarration, narrationClipUrl(nextGame.storyNarrationClipId));
+    narration.speak(openingNarration);
     music.playEvent("martial_soul_awakened");
     window.setTimeout(() => {
       resetPhoneViewport();
@@ -1536,7 +1635,7 @@ export default function Prototype() {
 
   const startPrologue = () => {
     keyboard.hide();
-    narration.speak(PROLOGUE_NARRATION, narrationClipUrl("prologue"));
+    narration.speak(PROLOGUE_NARRATION);
     setStage("prologue");
   };
 
@@ -1608,6 +1707,10 @@ export default function Prototype() {
           talent: game.talent,
           soulPower: game.soulPower,
           martialSoul: game.martialSoul,
+          originPlace: game.originPlace,
+          background: game.background,
+          lifeGoal: game.lifeGoal,
+          secret: game.secret,
         },
         scene: {
           chapter: node.chapter,
@@ -1615,6 +1718,9 @@ export default function Prototype() {
           location: node.location,
           narrative: game.storyNarrative,
           localOutcome: resolution.narrative,
+          canonAnchor: node.canonAnchor,
+          storyMode: game.storyMode,
+          narrativePace: game.narrativePace,
         },
         storySummary: game.storySummary,
         flags: game.storyFlags,
@@ -1765,6 +1871,10 @@ export default function Prototype() {
           identity: game.identity,
           soulPower: game.soulPower,
           location: game.location,
+          martialSoul: game.martialSoul,
+          background: game.background,
+          lifeGoal: game.lifeGoal,
+          secret: game.secret,
         },
         character: {
           name: character.name,
@@ -1912,6 +2022,9 @@ export default function Prototype() {
           talent: game.talent,
           soulPower: game.soulPower,
           martialSoul: game.martialSoul,
+          originPlace: game.originPlace,
+          background: game.background,
+          lifeGoal: game.lifeGoal,
         },
         scene: {
           chapter: "开放世界",
@@ -2004,6 +2117,11 @@ export default function Prototype() {
   };
 
   const openCombat = () => {
+    if (!game.soulRings[0]) {
+      setToast("完成第一次猎魂并获得魂环后，才会开放自由战斗");
+      setActiveTab("story");
+      return;
+    }
     const enemy = ENEMIES[game.victories % ENEMIES.length];
     const soul = getMartialSoul(game.martialSoulId) ?? MARTIAL_SOULS[0];
     const playerActions = [
@@ -2299,6 +2417,11 @@ export default function Prototype() {
     setName("");
     setIdentity("原创角色");
     setTalent("天才档");
+    setOriginPlace("法斯诺行省边缘村落");
+    setBackground("普通家庭");
+    setLifeGoal("与伙伴同行，也走出自己的道路");
+    setSecret("");
+    setNarrativePace("immersive");
     setSelectedMartialSoulId("blue-silver-grass");
   };
 
@@ -2327,10 +2450,20 @@ export default function Prototype() {
             name={name}
             identity={identity}
             talent={talent}
+            originPlace={originPlace}
+            background={background}
+            lifeGoal={lifeGoal}
+            secret={secret}
+            narrativePace={narrativePace}
             martialSoulId={selectedMartialSoulId}
             onNameChange={setName}
             onIdentityChange={setIdentity}
             onTalentChange={setTalent}
+            onOriginPlaceChange={setOriginPlace}
+            onBackgroundChange={setBackground}
+            onLifeGoalChange={setLifeGoal}
+            onSecretChange={setSecret}
+            onNarrativePaceChange={setNarrativePace}
             onMartialSoulChange={setSelectedMartialSoulId}
             onBegin={beginGame}
           />
@@ -2677,10 +2810,20 @@ type CreationProps = {
   name: string;
   identity: string;
   talent: string;
+  originPlace: string;
+  background: string;
+  lifeGoal: string;
+  secret: string;
+  narrativePace: GameState["narrativePace"];
   martialSoulId: MartialSoulId;
   onNameChange: (value: string) => void;
   onIdentityChange: (value: string) => void;
   onTalentChange: (value: string) => void;
+  onOriginPlaceChange: (value: string) => void;
+  onBackgroundChange: (value: string) => void;
+  onLifeGoalChange: (value: string) => void;
+  onSecretChange: (value: string) => void;
+  onNarrativePaceChange: (value: GameState["narrativePace"]) => void;
   onMartialSoulChange: (value: MartialSoulId) => void;
   onBegin: () => void;
 };
@@ -2689,10 +2832,15 @@ function CreationScreen(props: CreationProps) {
   return (
     <main className="screen-content creation-screen">
       <div className="screen-heading">
-        <span className="section-kicker">角色创建 · 第一步</span>
-        <h1>你想成为谁？</h1>
-        <p>这不是永久束缚，进入世界后仍然可以改变道路。</p>
+        <span className="section-kicker">原著同行 · 角色创建</span>
+        <h1>在原著时代，成为你自己</h1>
+        <p>唐三、小舞与史莱克七怪会依照原著时间成长；你拥有自己的出身、武魂、关系和结局。</p>
       </div>
+
+      <article className="canon-mode-card">
+        <strong>主线模式已启用</strong>
+        <p>从六岁武魂觉醒开始，完整经历诺丁六年、史莱克入学、魂师大赛、五年之约、海神岛与大陆终局。</p>
+      </article>
 
       <label className="field-label" htmlFor="character-name">角色姓名</label>
       <KeyboardInput
@@ -2707,7 +2855,7 @@ function CreationScreen(props: CreationProps) {
         <legend>开局身份</legend>
         {[
           ["穿越者", "带着另一个世界的记忆醒来"],
-          ["原著角色重生", "成为某位已存在的角色"],
+          ["原著同行者", "进入同一时代，但不替代原著角色"],
           ["原创角色", "在大陆留下自己的名字"],
           ["自定义身份", "进入游戏后继续补充设定"],
         ].map(([title, detail], index) => (
@@ -2720,6 +2868,29 @@ function CreationScreen(props: CreationProps) {
             <span className="selection-index">{String.fromCharCode(65 + index)}</span>
             <span><strong>{title}</strong><small>{detail}</small></span>
             {props.identity === title ? <CheckCircledIcon /> : null}
+          </button>
+        ))}
+      </fieldset>
+
+      <fieldset className="choice-fieldset compact-grid creation-detail-grid">
+        <legend>出生地点</legend>
+        {["法斯诺行省边缘村落", "诺丁城平民区", "圣魂村邻村", "猎魂森林外围聚落"].map((item) => (
+          <button className={props.originPlace === item ? "talent-chip selected" : "talent-chip"} key={item} type="button" onClick={() => props.onOriginPlaceChange(item)}>{item}</button>
+        ))}
+      </fieldset>
+
+      <fieldset className="choice-fieldset compact-grid creation-detail-grid">
+        <legend>家庭背景</legend>
+        {["普通家庭", "工匠家庭", "没落魂师家庭", "孤身由村落照料"].map((item) => (
+          <button className={props.background === item ? "talent-chip selected" : "talent-chip"} key={item} type="button" onClick={() => props.onBackgroundChange(item)}>{item}</button>
+        ))}
+      </fieldset>
+
+      <fieldset className="choice-fieldset creation-goal-grid">
+        <legend>人生目标</legend>
+        {["与伙伴同行，也走出自己的道路", "让普通武魂也得到公平对待", "理解魂师与魂兽能否共存", "成为足以保护重要之人的强者"].map((item) => (
+          <button className={props.lifeGoal === item ? "goal-card selected" : "goal-card"} key={item} type="button" onClick={() => props.onLifeGoalChange(item)}>
+            <span>{item}</span>{props.lifeGoal === item ? <CheckCircledIcon /> : null}
           </button>
         ))}
       </fieldset>
@@ -2750,6 +2921,29 @@ function CreationScreen(props: CreationProps) {
             <span className={`martial-soul-glyph ${soul.attribute}`}>{soul.name.slice(0, 1)}</span>
             <span><strong>{soul.name}</strong><small>{soul.quality} · {soul.role}</small></span>
             <em>{soul.initialSkill.name}</em>
+          </button>
+        ))}
+      </fieldset>
+
+      <label className="field-label" htmlFor="character-secret">个人秘密（可选）</label>
+      <KeyboardTextarea
+        id="character-secret"
+        className="text-field creation-secret"
+        value={props.secret}
+        onChange={(event) => props.onSecretChange(event.target.value)}
+        placeholder="例如：我隐约记得另一条时间线，但不确定那是否只是梦……"
+        rows={3}
+      />
+
+      <fieldset className="choice-fieldset pace-grid">
+        <legend>剧情节奏</legend>
+        {([
+          ["immersive", "沉浸", "完整场景与人物交流，推荐首次游玩"],
+          ["standard", "标准", "保留关键对话与成长过程"],
+          ["fast", "快速", "压缩过场，更快抵达重大事件"],
+        ] as const).map(([value, title, detail]) => (
+          <button className={props.narrativePace === value ? "pace-card selected" : "pace-card"} key={value} type="button" onClick={() => props.onNarrativePaceChange(value)}>
+            <strong>{title}{value === "immersive" ? " · 推荐" : ""}</strong><small>{detail}</small>
           </button>
         ))}
       </fieldset>
@@ -2798,13 +2992,14 @@ function StoryScreen({
   const node = getStoryNode(game);
   const activeNpcAction = getNpcAction(game.pendingNpcAction);
   const activeNpcCharacter = activeNpcAction ? getCharacter(activeNpcAction.characterId) : null;
-  const image = node.image ?? (node.location.includes("诺丁") ? "/game-assets/notting-city.png" : "/game-assets/world-map.png");
+  const displayLocation = formatStoryText(node.location, game);
+  const image = node.image ?? (displayLocation.includes("诺丁") ? "/game-assets/notting-city.png" : "/game-assets/world-map.png");
   const terminalEnding = Boolean(node.endingName && node.choices.length === 0);
   return (
     <section className="story-screen" aria-label="当前剧情">
       <div className="story-chapter-bar"><span>{node.chapter}</span><strong>时间线 {game.storyCycle}</strong></div>
       <header className="location-bar">
-        <span><DrawingPinIcon />{node.location} · {node.season}</span>
+        <span><DrawingPinIcon />{displayLocation} · {node.season}</span>
         <button
           className="story-audio-toggle"
           type="button"
@@ -2817,8 +3012,15 @@ function StoryScreen({
           {musicMuted ? <SpeakerOffIcon /> : <SpeakerLoudIcon />}
         </button>
       </header>
+      {node.canonAnchor ? (
+        <aside className="canon-anchor-card" aria-label="原著时间锚点">
+          <span>原著时间锚点</span>
+          <strong>{formatStoryText(node.canonAnchor, game)}</strong>
+          {node.sceneIndex && node.sceneCount ? <small>主线场景 {node.sceneIndex} / {node.sceneCount}</small> : null}
+        </aside>
+      ) : null}
       <div className="story-art">
-        <img src={mobileGameAssetUrl(image)} alt={node.imageAlt ?? `${node.location}当前剧情场景`} width="720" height="1279" fetchPriority="high" />
+        <img src={mobileGameAssetUrl(image)} alt={node.imageAlt ?? `${displayLocation}当前剧情场景`} width="720" height="1279" fetchPriority="high" />
         <span className="story-scene-title"><small>{node.quest}</small><strong>{node.title}</strong></span>
       </div>
       <article className="narrative-card">
@@ -2838,6 +3040,17 @@ function StoryScreen({
         </div>
         <p>{thinking ? "魂力在空气里轻轻震动，世界正在回应你的选择……" : game.storyNarrative}</p>
       </article>
+      {!thinking && node.dialogue?.length ? (
+        <section className="scene-dialogue" aria-label="当前场景人物对话">
+          <header><ChatBubbleIcon /><span>场景对话</span></header>
+          {node.dialogue.map((line, index) => (
+            <div key={`${line.speaker}-${index}`}>
+              <strong>{formatStoryText(line.speaker, game)}</strong>
+              <p>{formatStoryText(line.text, game)}</p>
+            </div>
+          ))}
+        </section>
+      ) : null}
       <div className="change-chip"><MagicWandIcon /><span>{game.lastStoryChange}</span></div>
       {activeNpcAction && activeNpcCharacter ? (
         <section className={`npc-action-card ${activeNpcCharacter.tone}`} aria-label={`${activeNpcCharacter.name}主动事件`}>
@@ -2875,7 +3088,7 @@ function StoryScreen({
           return (
           <button className={locked ? "locked" : ""} key={choice.id} type="button" onClick={() => onChoose(choice.id)} disabled={thinking || locked || Boolean(activeNpcAction)}>
             <span className="option-letter">{String.fromCharCode(65 + index)}</span>
-            <span>{choice.label}{locked ? <small>{choice.lockedText}</small> : null}</span>
+            <span>{formatStoryText(choice.label, game)}{locked ? <small>{choice.lockedText}</small> : null}</span>
             {locked ? <LockClosedIcon /> : <ChevronRightIcon />}
           </button>
           );
@@ -2887,9 +3100,23 @@ function StoryScreen({
         </button>
       </div>
       ) : null}
+      {game.storyMode === "canon" && game.storyHistory.length > 0 ? (
+        <details className="journey-recap">
+          <summary>最近的原著同行经历 <span>{game.storyHistory.length} 次选择</span></summary>
+          <div>
+            {game.storyHistory.slice(-5).reverse().map((entry, index) => (
+              <article key={`${entry.nodeTitle}-${entry.choiceLabel}-${index}`}>
+                <strong>{entry.nodeTitle}</strong>
+                <p>{entry.choiceLabel}</p>
+                <small>{entry.result}</small>
+              </article>
+            ))}
+          </div>
+        </details>
+      ) : null}
       <aside className="note-card">
         <BookmarkIcon />
-        <div><strong>{node.chapter} · {node.title}</strong><p>{game.storyNote}</p></div>
+        <div><strong>{node.chapter} · {node.title}</strong><p>{game.storyNote}</p>{node.timelineNote ? <small>{node.timelineNote}</small> : null}</div>
       </aside>
     </section>
   );
@@ -2911,6 +3138,7 @@ function WorldScreen({
   const enemy = ENEMIES[game.victories % ENEMIES.length];
   const currentLocation = getLocationByName(game.location);
   const storyNode = getStoryNode(game);
+  const canExploreWorld = game.storyMode !== "canon" || (storyNode.sceneIndex ?? 1) >= 4;
   const progress = getContentProgress(game);
   const unlockedCharacters = getUnlockedExtendedCharacters(progress);
   const recentWorldEvent = game.worldDirector.eventHistory.at(-1);
@@ -2940,8 +3168,8 @@ function WorldScreen({
         <header><span><MagicWandIcon /> 世界导演</span><strong>第 {game.worldDirector.day} 日</strong></header>
         <h2>{recentWorldEvent?.title ?? "大陆正在等待你的下一次探索"}</h2>
         <p>{recentWorldEvent?.summary ?? "随机支线会结合当前位置、武魂、关系与势力声望出现；AI 只在安全规则内改变世界。"}</p>
-        <button type="button" onClick={onExplore} disabled={worldThinking}>
-          {worldThinking ? "世界正在回应……" : "探索当前区域"}<ChevronRightIcon />
+        <button type="button" onClick={onExplore} disabled={worldThinking || !canExploreWorld}>
+          {worldThinking ? "世界正在回应……" : canExploreWorld ? "探索当前区域" : "完成入学旅程后开放"}<ChevronRightIcon />
         </button>
       </article>
       <section className="faction-panel" aria-label="大陆势力声望">
@@ -2964,10 +3192,10 @@ function WorldScreen({
       </article>
       <article className="quest-card">
         <span className="quest-icon"><DrawingPinIcon /></span>
-        <div><small>当前区域任务</small><h2>{currentLocation.questTitle}</h2><p>{currentLocation.questDescription}</p></div>
+        <div><small>{game.storyMode === "canon" ? "当前时代定位" : "当前区域任务"}</small><h2>{game.storyMode === "canon" ? formatStoryText(storyNode.canonAnchor ?? storyNode.title, game) : currentLocation.questTitle}</h2><p>{game.storyMode === "canon" ? "世界探索会随主线年代逐步开放，不会提前遇见尚未登场的人物或地点。" : currentLocation.questDescription}</p></div>
         <ChevronRightIcon />
       </article>
-      <article className="quest-card battle-quest-card">
+      {game.soulRings.length > 0 ? <><article className="quest-card battle-quest-card">
         <span className="quest-icon"><ExclamationTriangleIcon /></span>
         <div><small>实战试炼</small><h2>遭遇{enemy.name}</h2><p>{enemy.title} · {enemy.attribute}属性。根据克制关系选择攻击方式。</p></div>
         <button type="button" onClick={onBattle} aria-label={`挑战${enemy.name}`}><ChevronRightIcon /></button>
@@ -2975,6 +3203,7 @@ function WorldScreen({
       <button className="world-battle-button" type="button" onClick={onBattle}>
         <MagicWandIcon />进入魂师战斗
       </button>
+      </> : <article className="quest-card battle-quest-card locked-battle-card"><span className="quest-icon"><LockClosedIcon /></span><div><small>实战尚未开放</small><h2>先完成第一次猎魂</h2><p>获得第一魂环后，世界页才会开放自由魂师战斗。</p></div></article>}
       <div className="world-status"><span>当前位置</span><strong>{game.location}</strong><span>实战胜场</span><strong>{game.victories}</strong></div>
     </section>
   );
@@ -3019,6 +3248,10 @@ function RelationsScreen({
   onSelectCharacter: (characterId: CharacterId) => void;
 }) {
   const required = soulExperienceRequired(game.soulPower);
+  const sceneIndex = getStoryNode(game).sceneIndex ?? Number.POSITIVE_INFINITY;
+  const introducedCharacters = game.storyMode === "canon"
+    ? characters.filter((character) => sceneIndex >= ({ "xiao-wu": 6, "ning-rongrong": 23, "dai-mubai": 23, oscar: 27 }[character.id]))
+    : characters;
   return (
     <section className="relations-screen">
       <header className="profile-header">
@@ -3048,6 +3281,7 @@ function RelationsScreen({
       </div>
 
       <h2 className="section-title">魂环与魂技</h2>
+      {game.soulRings.length === 0 ? <aside className="empty-soul-ring"><span className="ring-orb" /><div><strong>尚未获得第一魂环</strong><p>继续原著主线至第一次猎魂，你的武魂定位和选择会决定第一魂技。</p></div></aside> : null}
       {game.soulRings.map((ring, index) => {
         const ordinal = index === 0 ? "第一" : "第二";
         return (
@@ -3067,7 +3301,7 @@ function RelationsScreen({
 
       <h2 className="section-title">人物关系</h2>
       <div className="character-grid">
-        {characters.map((character) => {
+        {introducedCharacters.map((character) => {
           const score = game.relationships[character.id] ?? initialRelationships[character.id];
           return (
           <button
@@ -3087,7 +3321,7 @@ function RelationsScreen({
           );
         })}
       </div>
-      <aside className="relation-tip"><ChatBubbleIcon /><span>点击人物卡可查看专属档案、剧情并进行对话。</span></aside>
+      <aside className="relation-tip"><ChatBubbleIcon /><span>{introducedCharacters.length > 0 ? "点击人物卡可查看专属档案、剧情并进行对话。" : "你还没有正式结识原著人物。关系会在对应主线场景后自然开放。"}</span></aside>
     </section>
   );
 }

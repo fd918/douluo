@@ -1,3 +1,5 @@
+import { CANON_ENDINGS, CANON_START_NODE_ID, canonStoryNodes } from "./canonStory.ts";
+
 export type StoryHistoryEntry = {
   nodeTitle: string;
   choiceLabel: string;
@@ -11,6 +13,16 @@ export type StoryState = {
   completedEndings: string[];
   storyCycle: number;
   relationship: number;
+  name?: string;
+  martialSoul?: string;
+  identity?: string;
+  talent?: string;
+  storyMode?: "canon" | "legacy";
+  narrativePace?: "immersive" | "standard" | "fast";
+  originPlace?: string;
+  background?: string;
+  lifeGoal?: string;
+  secret?: string;
 };
 
 type StoryEffect = {
@@ -43,6 +55,12 @@ export type StoryNode = {
   imageAlt?: string;
   choices: StoryChoice[];
   endingName?: string;
+  intro?: string;
+  canonAnchor?: string;
+  sceneIndex?: number;
+  sceneCount?: number;
+  timelineNote?: string;
+  dialogue?: Array<{ speaker: string; text: string }>;
 };
 
 export type StoryResolution = {
@@ -70,6 +88,7 @@ export const ALL_ENDINGS = [
   "史莱克星辉",
   "蓝银裁决者",
   "潮汐远行者",
+  ...CANON_ENDINGS,
 ] as const;
 
 export function buildSceneBridge(currentNode: StoryNode, nextNode: StoryNode) {
@@ -83,7 +102,7 @@ export function buildSceneBridge(currentNode: StoryNode, nextNode: StoryNode) {
   return `余波尚未散去，新的局面已经逼近。“${nextNode.title}”，随之展开。此刻，你必须${nextNode.quest}。`;
 }
 
-export const storyNodes: Record<string, StoryNode> = {
+const legacyStoryNodes: Record<string, StoryNode> = {
   notting_street: node({
     id: "notting_street", chapter: "第一章 · 雨后异痕", title: "发光的脚印", location: "诺丁城", season: "三月·午后", quest: "查清雨后脚印的来源", choices: [
       { id: "chase", label: "顺着脚印追上去", nextId: "narrow_alley", outcome: "你追进窄巷。一个背着旧布包的少年停住脚步，把沾着草叶的手藏到身后，却没有逃。", note: "少年正在寻找能压制魂力反噬的月纹草。", effect: { experience: 70, relationship: 2, addFlags: ["追踪脚印"] } },
@@ -303,8 +322,42 @@ export const storyNodes: Record<string, StoryNode> = {
   ending_tide_wanderer: node({ id: "ending_tide_wanderer", chapter: "最终结局", title: "潮汐远行者", location: "未知海域", season: "下一次日出", quest: "这条史诗时间线已经完成", choices: [], endingName: "潮汐远行者" }),
 };
 
+export const storyNodes: Record<string, StoryNode> = {
+  ...legacyStoryNodes,
+  ...canonStoryNodes,
+};
+
+export { CANON_SCENE_COUNT, CANON_START_NODE_ID } from "./canonStory.ts";
+
+export function formatStoryText(text: string, game: StoryState) {
+  const replacements: Record<string, string> = {
+    name: game.name?.trim() || "无名",
+    martialSoul: game.martialSoul || "尚未觉醒的武魂",
+    identity: game.identity || "原创角色",
+    talent: game.talent || "普通档",
+    originPlace: game.originPlace || "法斯诺行省边缘村落",
+    background: game.background || "普通家庭",
+    lifeGoal: game.lifeGoal || "找到属于自己的道路",
+    secret: game.secret || "尚未向任何人说出的心事",
+  };
+  return text.replace(/\{\{(\w+)\}\}/g, (placeholder, key: string) => replacements[key] ?? placeholder);
+}
+
+function applyNarrativePace(text: string, pace: StoryState["narrativePace"]) {
+  if (pace !== "fast") return text;
+  const paragraphs = text.split(/\n\n+/).filter(Boolean);
+  return paragraphs.length <= 2 ? text : `${paragraphs[0]}\n\n${paragraphs.at(-1)}`;
+}
+
+export function getStoryIntro(game: StoryState) {
+  const node = getStoryNode(game);
+  const intro = node.intro ?? buildSceneBridge(node, node);
+  return applyNarrativePace(formatStoryText(intro, game), game.narrativePace);
+}
+
 export function getStoryNode(game: StoryState) {
-  return storyNodes[game.currentStoryNodeId] ?? storyNodes.notting_street;
+  return storyNodes[game.currentStoryNodeId]
+    ?? (game.storyMode === "canon" ? storyNodes[CANON_START_NODE_ID] : storyNodes.notting_street);
 }
 
 export function resolveStoryChoice(game: StoryState, choiceId: string, customAction?: string): StoryResolution | null {
@@ -314,9 +367,13 @@ export function resolveStoryChoice(game: StoryState, choiceId: string, customAct
   const nextNode = storyNodes[choice.nextId];
   if (!nextNode) return null;
   const effect = choice.effect ?? {};
-  const choiceLabel = customAction ? `自由行动：${customAction}` : choice.label;
-  const outcome = customAction ? `你选择“${customAction}”，用自己的方式推动局势。${choice.outcome}` : choice.outcome;
-  const bridge = buildSceneBridge(currentNode, nextNode);
+  const formattedChoice = formatStoryText(choice.label, game);
+  const choiceLabel = customAction ? `自由行动：${customAction}` : formattedChoice;
+  const formattedOutcome = formatStoryText(choice.outcome, game);
+  const outcome = customAction ? `你选择“${customAction}”，用自己的方式推动局势。${formattedOutcome}` : formattedOutcome;
+  const bridge = nextNode.intro
+    ? applyNarrativePace(formatStoryText(nextNode.intro, game), game.narrativePace)
+    : buildSceneBridge(currentNode, nextNode);
   const changes = [
     effect.experience ? `魂力经验 +${effect.experience}` : "",
     effect.coins ? `金魂币 ${effect.coins > 0 ? "+" : ""}${effect.coins}` : "",
@@ -326,14 +383,14 @@ export function resolveStoryChoice(game: StoryState, choiceId: string, customAct
   return {
     nextNodeId: nextNode.id,
     narrative: bridge ? `${outcome}\n\n${bridge}` : outcome,
-    note: choice.note,
+    note: formatStoryText(choice.note, game),
     experience: effect.experience ?? 0,
     coins: effect.coins ?? 0,
     relationship: effect.relationship ?? 0,
     flags: [...new Set([...game.storyFlags, ...(effect.addFlags ?? [])])],
     rewardItemId: effect.rewardItemId,
     lastChange: changes.join(" · ") || "命运标记已更新",
-    historyEntry: { nodeTitle: currentNode.title, choiceLabel, result: choice.note },
+    historyEntry: { nodeTitle: currentNode.title, choiceLabel, result: formatStoryText(choice.note, game) },
     endingName: nextNode.endingName,
   };
 }

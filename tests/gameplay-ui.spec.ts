@@ -17,7 +17,16 @@ test("六武魂开局、世界支线与拍卖在手机尺寸可完整操作", as
   await expect(page.locator(".martial-soul-card")).toHaveCount(6);
   await page.getByRole("button", { name: /赤羽隼/ }).click();
   await page.getByRole("button", { name: "进入斗罗大陆" }).click();
-  await expect(page.getByText(/赤羽隼在你掌心缓缓展开/)).toBeVisible();
+  await expect(page.getByText("六岁那年的清晨", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("原著时间锚点").getByText(/圣魂村武魂觉醒日前后/)).toBeVisible();
+
+  await page.locator(".option-list button:not([disabled]):not(.locked)").first().click();
+  await page.waitForTimeout(800);
+  await expect(page.getByText(/赤羽隼的轮廓第一次在掌心成形/)).toBeVisible();
+  for (let index = 0; index < 2; index += 1) {
+    await page.locator(".option-list button:not([disabled]):not(.locked)").first().click();
+    await page.waitForTimeout(800);
+  }
 
   await page.getByRole("button", { name: "世界", exact: true }).click();
   await expect(page.getByText("世界导演", { exact: true })).toBeVisible();
@@ -75,7 +84,7 @@ test("375px、小屏横屏、减少动态效果和大字体均不产生横向溢
   expect(landscapeLayout.height).toBe(390);
 });
 
-test("微信式无系统语音环境使用录制旁白，物品原画与清档确认可正常操作", async ({ page }) => {
+test("微信式无系统语音环境保留原著同行文字，物品原画与清档确认可正常操作", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "speechSynthesis", { configurable: true, value: undefined });
     Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: undefined });
@@ -94,11 +103,7 @@ test("微信式无系统语音环境使用录制旁白，物品原画与清档�
   await page.reload();
 
   await page.getByRole("button", { name: "开始新的人生" }).click();
-  await expect(page.getByText("正在自动朗读")).toBeVisible();
-  await expect.poll(() => page.evaluate(() => {
-    const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
-    return urls.some((url) => url.endsWith("/audio/douluo/narration/prologue.mp3"));
-  })).toBe(true);
+  await expect(page.getByText("当前段落仅显示文字")).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
     return urls.some((url) => url.endsWith("/audio/douluo/loops/bgm_distant_sea.ogg"));
@@ -106,10 +111,12 @@ test("微信式无系统语音环境使用录制旁白，物品原画与清档�
 
   await page.getByRole("button", { name: "塑造我的身份" }).click();
   await page.getByRole("button", { name: "进入斗罗大陆" }).click();
-  await expect.poll(() => page.evaluate(() => {
+  await expect(page.getByText("六岁那年的清晨", { exact: true })).toBeVisible();
+  const usedLegacyOpening = await page.evaluate(() => {
     const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
     return urls.some((url) => url.endsWith("/audio/douluo/narration/opening-blue-silver-grass.mp3"));
-  })).toBe(true);
+  });
+  expect(usedLegacyOpening).toBe(false);
 
   await page.getByRole("button", { name: "行囊", exact: true }).click();
   const itemArt = page.locator(".interactive-inventory .item-icon img");
