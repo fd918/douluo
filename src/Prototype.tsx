@@ -1395,9 +1395,10 @@ export default function Prototype() {
   const narration = useNarration();
 
   useEffect(() => {
-    music.setNarrationDucking(narration.status === "speaking");
+    const isSpeaking = narration.status === "speaking";
+    music.setNarrationDucking(isSpeaking, -9);
     return () => music.setNarrationDucking(false);
-  }, [music.setNarrationDucking, narration.status]);
+  }, [music.setNarrationDucking, narration.status, stage]);
 
   useEffect(() => {
     if (stage !== "game") return;

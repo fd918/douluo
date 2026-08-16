@@ -25,6 +25,7 @@ test("默认预填 Agnes 地址和模型，但不会内置密钥", () => {
   assert.equal(DEFAULT_BROWSER_AI_CONFIG.apiKey, "");
   assert.equal(DEFAULT_BROWSER_AI_CONFIG.enabled, false);
 });
+
 test("配置只保存到传入的浏览器存储并可清除", () => {
   const storage = createStorage();
   const saved = saveBrowserAiConfig({

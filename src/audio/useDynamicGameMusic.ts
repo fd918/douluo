@@ -21,6 +21,10 @@ function getScene(location: string) {
 }
 
 function getMood(context: MusicContext) {
+  if (context.stage === "welcome" || context.stage === "prologue") {
+    return { mood: "solemn", intensity: 2 as const };
+  }
+  if (context.stage === "creation") return { mood: "warm", intensity: 1 as const };
   if (context.inCombat) return { mood: "battle", intensity: 3 as const };
   if (context.activeTab === "relations") return { mood: "warm", intensity: 1 as const };
   if (context.activeTab === "archive") return { mood: "memory", intensity: 1 as const };
@@ -95,8 +99,8 @@ export function useDynamicGameMusic(context: MusicContext) {
     if (unlocked) await controller.playEvent(event);
   }, []);
 
-  const setNarrationDucking = useCallback((active: boolean) => {
-    controllerRef.current?.setBackgroundDucking(active, -10);
+  const setNarrationDucking = useCallback((active: boolean, decibels = -9) => {
+    controllerRef.current?.setBackgroundDucking(active, decibels);
   }, []);
 
   return { muted, ready, toggleMuted, playEvent, setNarrationDucking };

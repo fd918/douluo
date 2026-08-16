@@ -17,7 +17,7 @@ test("六武魂开局、世界支线与拍卖在手机尺寸可完整操作", as
   await expect(page.locator(".martial-soul-card")).toHaveCount(6);
   await page.getByRole("button", { name: /赤羽隼/ }).click();
   await page.getByRole("button", { name: "进入斗罗大陆" }).click();
-  await expect(page.getByText(/赤羽隼在你掌心展开/)).toBeVisible();
+  await expect(page.getByText(/赤羽隼在你掌心缓缓展开/)).toBeVisible();
 
   await page.getByRole("button", { name: "世界", exact: true }).click();
   await expect(page.getByText("世界导演", { exact: true })).toBeVisible();
@@ -98,6 +98,10 @@ test("微信式无系统语音环境使用录制旁白，物品原画与清档�
   await expect.poll(() => page.evaluate(() => {
     const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
     return urls.some((url) => url.endsWith("/audio/douluo/narration/prologue.mp3"));
+  })).toBe(true);
+  await expect.poll(() => page.evaluate(() => {
+    const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
+    return urls.some((url) => url.endsWith("/audio/douluo/loops/bgm_distant_sea.ogg"));
   })).toBe(true);
 
   await page.getByRole("button", { name: "塑造我的身份" }).click();

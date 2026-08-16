@@ -49,5 +49,5 @@ test("主线跨场景时会在选择结果后补充转场交代", () => {
   assert.ok(resolution);
   assert.match(resolution.narrative, /你从火中抢下一页账册/);
   assert.match(resolution.narrative, /第二章 · 离城之路/);
-  assert.match(resolution.narrative, /四月·清晨，你来到诺丁城南门/);
+  assert.match(resolution.narrative, /四月·清晨，你抵达诺丁城南门/);
 });
