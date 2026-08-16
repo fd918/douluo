@@ -129,6 +129,7 @@ export class DynamicMusicController {
   private duckFrame: number | null = null;
   private stingerGeneration = 0;
   private detachUnlockListeners: (() => void) | null = null;
+  private unlockPromise: Promise<boolean> | null = null;
   private unlocked = false;
   private suspended = typeof document !== "undefined" ? document.hidden : false;
   private destroyed = false;
@@ -188,6 +189,16 @@ export class DynamicMusicController {
   async unlock() {
     if (this.destroyed) return false;
     if (this.unlocked) return true;
+    if (this.unlockPromise) return this.unlockPromise;
+    this.unlockPromise = this.performUnlock();
+    try {
+      return await this.unlockPromise;
+    } finally {
+      this.unlockPromise = null;
+    }
+  }
+
+  private async performUnlock() {
     if (typeof Audio === "undefined" || this.loops.length === 0) return false;
 
     this.ensureChannels();

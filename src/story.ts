@@ -72,6 +72,17 @@ export const ALL_ENDINGS = [
   "潮汐远行者",
 ] as const;
 
+function buildSceneBridge(currentNode: StoryNode, nextNode: StoryNode) {
+  if (nextNode.choices.length === 0) return "";
+  if (currentNode.chapter !== nextNode.chapter) {
+    return `这条线索让时间线进入${nextNode.chapter}。${nextNode.season}，你来到${nextNode.location}，“${nextNode.title}”已经展开。眼下，你需要${nextNode.quest}。`;
+  }
+  if (currentNode.location !== nextNode.location) {
+    return `局势没有停下。${nextNode.season}，你转入${nextNode.location}，“${nextNode.title}”随之展开。接下来，你需要${nextNode.quest}。`;
+  }
+  return `局势随即进入“${nextNode.title}”。接下来，你需要${nextNode.quest}。`;
+}
+
 export const storyNodes: Record<string, StoryNode> = {
   notting_street: node({
     id: "notting_street", chapter: "第一章 · 雨后异痕", title: "发光的脚印", location: "诺丁城", season: "三月·午后", quest: "查清雨后脚印的来源", choices: [
@@ -304,6 +315,8 @@ export function resolveStoryChoice(game: StoryState, choiceId: string, customAct
   if (!nextNode) return null;
   const effect = choice.effect ?? {};
   const choiceLabel = customAction ? `自由行动：${customAction}` : choice.label;
+  const outcome = customAction ? `你选择“${customAction}”，用自己的方式推动局势。${choice.outcome}` : choice.outcome;
+  const bridge = buildSceneBridge(currentNode, nextNode);
   const changes = [
     effect.experience ? `魂力经验 +${effect.experience}` : "",
     effect.coins ? `金魂币 ${effect.coins > 0 ? "+" : ""}${effect.coins}` : "",
@@ -312,7 +325,7 @@ export function resolveStoryChoice(game: StoryState, choiceId: string, customAct
   ].filter(Boolean);
   return {
     nextNodeId: nextNode.id,
-    narrative: customAction ? `你选择“${customAction}”，用自己的方式推动局势。${choice.outcome}` : choice.outcome,
+    narrative: bridge ? `${outcome}\n\n${bridge}` : outcome,
     note: choice.note,
     experience: effect.experience ?? 0,
     coins: effect.coins ?? 0,
