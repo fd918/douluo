@@ -1,15 +1,19 @@
 import { handleAiRequest } from "./ai-core.js";
 import { getCloudRuntime, handleOpsRequest } from "./ai-ops-cloud.js";
 
-const CORS_ORIGINS = new Set(["https://fd918.github.io"]);
+const CORS_ORIGINS = new Set([
+  "https://fd918.github.io",
+  "http://127.0.0.1:4180",
+  "http://localhost:4180",
+]);
 
 function withCors(response, request) {
   const origin = request.headers.get("origin");
   if (!origin || !CORS_ORIGINS.has(origin)) return response;
   const corsResponse = new Response(response.body, response);
   corsResponse.headers.set("access-control-allow-origin", origin);
-  corsResponse.headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
-  corsResponse.headers.set("access-control-allow-headers", "content-type");
+  corsResponse.headers.set("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
+  corsResponse.headers.set("access-control-allow-headers", "authorization, content-type");
   corsResponse.headers.append("vary", "Origin");
   return corsResponse;
 }
@@ -18,7 +22,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/ops/")) {
-      return handleOpsRequest(request, env);
+      if (request.method === "OPTIONS") {
+        return withCors(new Response(null, { status: 204 }), request);
+      }
+      return withCors(await handleOpsRequest(request, env), request);
     }
     if (url.pathname.startsWith("/api/ai/")) {
       if (request.method === "OPTIONS") {

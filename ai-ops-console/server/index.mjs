@@ -61,6 +61,16 @@ async function handleApi(request, response, url) {
   applyCors(request, response);
   if (request.method === "OPTIONS") { response.writeHead(204); response.end(); return true; }
 
+  if (url.pathname === "/api/cloud-session" && request.method === "GET") {
+    jsonResponse(response, 200, {
+      ok: true,
+      configured: cloudConfig.configured,
+      baseUrl: cloudConfig.baseUrl,
+      adminToken: cloudConfig.adminToken,
+    });
+    return true;
+  }
+
   if (isCloudManagementRequest(url.pathname) && cloudConfig.configured) {
     return proxyCloudManagement(request, response, url, cloudConfig);
   }

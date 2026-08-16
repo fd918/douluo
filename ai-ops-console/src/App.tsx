@@ -143,10 +143,55 @@ const requestKindLabels: Record<string, string> = {
   health_check: "连通测试",
 };
 
+type CloudSession = {
+  configured: boolean;
+  baseUrl: string;
+  adminToken: string;
+};
+
+let cloudSessionPromise: Promise<CloudSession> | null = null;
+
+function mapCloudPath(pathname: string) {
+  const url = new URL(pathname, window.location.origin);
+  const mappings = [
+    ["/api/health", "/api/ops/health"],
+    ["/api/overview", "/api/ops/overview"],
+    ["/api/providers", "/api/ops/providers"],
+    ["/api/settings", "/api/ops/settings"],
+    ["/api/logs", "/api/ops/logs"],
+  ];
+  for (const [local, cloud] of mappings) {
+    if (url.pathname === local || url.pathname.startsWith(`${local}/`)) {
+      return `${cloud}${url.pathname.slice(local.length)}${url.search}`;
+    }
+  }
+  return null;
+}
+
+async function getCloudSession() {
+  if (!cloudSessionPromise) {
+    cloudSessionPromise = fetch("/api/cloud-session", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.error || "公网控制配置读取失败");
+        return payload as CloudSession;
+      });
+  }
+  return cloudSessionPromise;
+}
+
 async function api<T>(pathname: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(pathname, {
+  const session = await getCloudSession();
+  const cloudPath = session.configured ? mapCloudPath(pathname) : null;
+  const target = cloudPath ? `${session.baseUrl}${cloudPath}` : pathname;
+  const response = await fetch(target, {
     ...init,
-    headers: init?.body ? { "content-type": "application/json", ...init.headers } : init?.headers,
+    cache: "no-store",
+    headers: {
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...(cloudPath ? { authorization: `Bearer ${session.adminToken}` } : {}),
+      ...init?.headers,
+    },
   });
   const payload = await response.json();
   if (!response.ok || payload.ok === false) throw new Error(payload.error || payload.message || "请求失败");
