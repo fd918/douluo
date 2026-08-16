@@ -74,3 +74,55 @@ test("375px、小屏横屏、减少动态效果和大字体均不产生横向溢
   expect(landscapeLayout.overflow).toBeLessThanOrEqual(0);
   expect(landscapeLayout.height).toBe(390);
 });
+
+test("微信式无系统语音环境使用录制旁白，物品原画与清档确认可正常操作", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: undefined });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: undefined });
+    const playbackUrls: string[] = [];
+    Object.defineProperty(window, "__narrationPlaybackUrls", { configurable: true, value: playbackUrls });
+    HTMLMediaElement.prototype.play = function play() {
+      playbackUrls.push(this.src);
+      this.dispatchEvent(new Event("playing"));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function pause() {};
+  });
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto("/?native=1");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  await page.getByRole("button", { name: "开始新的人生" }).click();
+  await expect(page.getByText("正在自动朗读")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
+    return urls.some((url) => url.endsWith("/audio/douluo/narration/prologue.mp3"));
+  })).toBe(true);
+
+  await page.getByRole("button", { name: "塑造我的身份" }).click();
+  await page.getByRole("button", { name: "进入斗罗大陆" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const urls = (window as typeof window & { __narrationPlaybackUrls?: string[] }).__narrationPlaybackUrls ?? [];
+    return urls.some((url) => url.endsWith("/audio/douluo/narration/opening-blue-silver-grass.mp3"));
+  })).toBe(true);
+
+  await page.getByRole("button", { name: "行囊", exact: true }).click();
+  const itemArt = page.locator(".interactive-inventory .item-icon img");
+  await expect(itemArt).toHaveCount(5);
+  await expect(itemArt.first()).toHaveAttribute("alt", "学院推荐信图标");
+  await page.locator(".interactive-inventory button").first().click();
+  await expect(page.locator(".item-sheet-hero img")).toHaveAttribute("alt", "学院推荐信图标");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "档案", exact: true }).click();
+  await page.getByRole("button", { name: "重新创建角色" }).click();
+  await expect(page.getByRole("heading", { name: "确认重新创建角色？" })).toBeVisible();
+  await expect(page.getByText(/角色属性、剧情时间线、已发现结局/)).toBeVisible();
+  await page.getByRole("button", { name: "取消，保留当前角色" }).click();
+  await expect(page.getByText("档案与时间线")).toBeVisible();
+
+  await page.getByRole("button", { name: "重新创建角色" }).click();
+  await page.getByRole("button", { name: "确认清除并重新创建" }).click();
+  await expect(page.getByRole("button", { name: "开始新的人生" })).toBeVisible();
+});

@@ -5,19 +5,10 @@ import {
   ChatBubbleIcon,
   CheckCircledIcon,
   ChevronRightIcon,
-  ComponentInstanceIcon,
-  CrossCircledIcon,
-  CubeIcon,
   DrawingPinIcon,
-  EnvelopeClosedIcon,
   ExclamationTriangleIcon,
-  FileTextIcon,
   GlobeIcon,
-  Half2Icon,
   HeartFilledIcon,
-  IdCardIcon,
-  LayersIcon,
-  LightningBoltIcon,
   LockClosedIcon,
   MagicWandIcon,
   PaperPlaneIcon,
@@ -26,11 +17,8 @@ import {
   PlayIcon,
   ReaderIcon,
   ReloadIcon,
-  SewingPinIcon,
   SpeakerLoudIcon,
   SpeakerOffIcon,
-  StarIcon,
-  TokensIcon,
 } from "@radix-ui/react-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, KeyboardInput, KeyboardTextarea, MobileScroll, useKeyboard } from "./mobile";
@@ -50,6 +38,12 @@ import {
 } from "./story";
 import { useDynamicGameMusic } from "./audio/useDynamicGameMusic";
 import { useNarration, type NarrationStatus } from "./audio/useNarration";
+import {
+  PROLOGUE_NARRATION,
+  PROLOGUE_PARAGRAPHS,
+  buildOpeningNarration,
+  narrationClipUrl,
+} from "./narrationContent";
 import { publicAssetUrl } from "./publicAsset";
 import {
   EXTENDED_CHARACTERS,
@@ -218,6 +212,7 @@ type GameState = {
   storyCycle: number;
   lastStoryChange: string;
   storyNarrative: string;
+  storyNarrationClipId: string | null;
   storyNote: string;
   storySummary: string;
   storySummaryThroughTurn: number;
@@ -294,14 +289,6 @@ const LEGACY_SAVE_KEY = "douluo-life-simulator-save-v1";
 const STORY_SUMMARY_INTERVAL = 12;
 const STORY_SUMMARY_EVENT_LIMIT = 16;
 const DIALOGUE_MESSAGE_LIMIT = 20;
-const PROLOGUE_PARAGRAPHS = [
-  "斗罗大陆，一个没有魔法与斗气，却由武魂决定无数人命运的世界。每个人都会在六岁觉醒武魂，少数拥有魂力的人，则能通过魂环踏上魂师之路。",
-  "帝国、宗门、魂师学院与魂兽森林共同维持着脆弱的秩序。力量可以守护伙伴，也可能让人沦为欲望的容器；没有哪条道路天生正确。",
-  "你的故事将从法斯诺行省的诺丁城开始。学院后门一串泛着蓝光的脚印，正把平静的新生活引向一场横跨学院、森林、天斗城与远海的阴谋。",
-  "你可以结交伙伴、守护魂兽、追逐力量，也可以拒绝所有既定答案。每一次选择都会留在时间线上，并把你带向不同的结局。现在，先决定你要以怎样的身份醒来。",
-] as const;
-const PROLOGUE_NARRATION = PROLOGUE_PARAGRAPHS.join("");
-
 function mobileGameAssetUrl(path: string) {
   return publicAssetUrl(path.replace(/\.png$/i, "-mobile.webp"));
 }
@@ -438,26 +425,26 @@ const ITEMS: Record<string, ItemDefinition> = {
   },
 };
 
-const ITEM_GLYPHS = {
-  academy_letter: EnvelopeClosedIcon,
-  old_purse: TokensIcon,
-  healing_herb: CrossCircledIcon,
-  blank_notebook: FileTextIcon,
-  focus_incense: MagicWandIcon,
-  apprentice_guard: Half2Icon,
-  cloth_armor: LayersIcon,
-  millennium_essence: StarIcon,
-  sea_crystal: ComponentInstanceIcon,
-  tournament_badge: IdCardIcon,
-  vast_sea_chart: DrawingPinIcon,
-  tide_armor: LayersIcon,
-  soul_energy_draught: LightningBoltIcon,
-  wind_chaser_right_leg_bone: SewingPinIcon,
-  ironback_torso_bone: CubeIcon,
+const ITEM_ART = {
+  academy_letter: "academy-letter.jpg",
+  old_purse: "old-purse.jpg",
+  healing_herb: "healing-herb.jpg",
+  blank_notebook: "blank-notebook.jpg",
+  focus_incense: "focus-incense.jpg",
+  apprentice_guard: "apprentice-guard.jpg",
+  cloth_armor: "cloth-armor.jpg",
+  millennium_essence: "millennium-essence.jpg",
+  sea_crystal: "sea-crystal.jpg",
+  tournament_badge: "tournament-badge.jpg",
+  vast_sea_chart: "vast-sea-chart.jpg",
+  tide_armor: "tide-armor.jpg",
+  soul_energy_draught: "soul-energy-draught.jpg",
+  wind_chaser_right_leg_bone: "wind-chaser-right-leg-bone.jpg",
+  ironback_torso_bone: "ironback-torso-bone.jpg",
 } as const;
 
 function ItemGlyph({ item, className = "" }: { item: ItemDefinition; className?: string }) {
-  const Icon = ITEM_GLYPHS[item.id as keyof typeof ITEM_GLYPHS] ?? BookmarkIcon;
+  const artwork = ITEM_ART[item.id as keyof typeof ITEM_ART];
   const tone = item.category === "关键物品"
     ? "quest"
     : item.category === "消耗品"
@@ -467,7 +454,13 @@ function ItemGlyph({ item, className = "" }: { item: ItemDefinition; className?:
         : item.category === "装备"
           ? "equipment"
           : "common";
-  return <span className={`item-icon ${tone} ${className}`.trim()} aria-hidden="true"><Icon /></span>;
+  return (
+    <span className={`item-icon ${tone} ${className}`.trim()}>
+      {artwork
+        ? <img src={publicAssetUrl(`game-assets/items/${artwork}`)} alt={`${item.name}图标`} width="256" height="256" loading="lazy" />
+        : <BookmarkIcon aria-hidden="true" />}
+    </span>
+  );
 }
 
 const INVENTORY_ORDER = [
@@ -576,6 +569,7 @@ const initialGame: GameState = {
   lastStoryChange: "新的时间线已经开启",
   storyNarrative:
     "武魂觉醒后的第三天，你带着学院推荐信来到诺丁城。铁匠铺的敲击声隔着两条巷子传来，雨后的青石路上留着一串泛着蓝光的新鲜脚印。你原本只想完成入学报到，却在这一刻被卷入了另一条命运。",
+  storyNarrationClipId: "opening-blue-silver-grass",
   storyNote: "脚印边缘残留着植物系魂力，这不是普通行人留下的痕迹。",
   storySummary: "",
   storySummaryThroughTurn: 0,
@@ -998,6 +992,7 @@ function hydrateGame(value: Partial<GameState> | null | undefined): GameState {
     completedEndings: Array.isArray(value?.completedEndings) ? value.completedEndings : [],
     currentStoryNodeId: hasStructuredStory ? (value?.currentStoryNodeId ?? initialGame.currentStoryNodeId) : initialGame.currentStoryNodeId,
     storyNarrative: hasStructuredStory ? (value?.storyNarrative ?? initialGame.storyNarrative) : initialGame.storyNarrative,
+    storyNarrationClipId: typeof value?.storyNarrationClipId === "string" ? value.storyNarrationClipId : null,
     storyNote: hasStructuredStory ? (value?.storyNote ?? initialGame.storyNote) : initialGame.storyNote,
     storySummary: typeof value?.storySummary === "string" ? value.storySummary.slice(0, 600) : "",
     storySummaryThroughTurn: Math.max(0, Math.min(value?.turns ?? 0, value?.storySummaryThroughTurn ?? 0)),
@@ -1146,6 +1141,7 @@ function applyStoryChoice(game: GameState, choiceId: string, customAction?: stri
     narrative: resolution.narrative,
     note: resolution.note,
     storyNarrative: resolution.narrative,
+    storyNarrationClipId: customAction ? null : `story-${game.currentStoryNodeId}-${choiceId}`,
     storyNote: resolution.note,
   };
   const secondRingFlag = Object.keys(SECOND_SOUL_RINGS).find((flag) => resolution.flags.includes(flag));
@@ -1278,7 +1274,7 @@ const narrationStatusLabels: Record<NarrationStatus, string> = {
   idle: "等待下一段剧情",
   speaking: "正在自动朗读",
   paused: "旁白已暂停",
-  unavailable: "当前浏览器不支持语音",
+  unavailable: "当前段落仅显示文字",
 };
 
 function NarrationControls({
@@ -1353,6 +1349,7 @@ export default function Prototype() {
   const [dialogueSending, setDialogueSending] = useState<CharacterId | null>(null);
   const [selectedWorldEvent, setSelectedWorldEvent] = useState<RandomSideEventDefinition | null>(null);
   const [worldThinking, setWorldThinking] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const summaryAttemptKeyRef = useRef("");
   const lastNarrationKeyRef = useRef("");
   const game = session.game;
@@ -1409,8 +1406,15 @@ export default function Prototype() {
     const narrationKey = `${game.currentStoryNodeId}:${game.storyNarrative}`;
     if (lastNarrationKeyRef.current === narrationKey) return;
     lastNarrationKeyRef.current = narrationKey;
-    narration.speak(game.storyNarrative);
-  }, [activeTab, game.currentStoryNodeId, game.storyNarrative, narration.enabled, narration.speak, narration.stop, stage, thinking]);
+    narration.speak(game.storyNarrative, narrationClipUrl(game.storyNarrationClipId));
+  }, [activeTab, game.currentStoryNodeId, game.storyNarrationClipId, game.storyNarrative, narration.enabled, narration.speak, narration.stop, stage, thinking]);
+
+  useEffect(() => {
+    if (stage !== "game" || !narration.enabled || !narration.hasRecordedClip || narration.status !== "unavailable") return;
+    const resumeAfterMobileGesture = () => narration.replay();
+    window.addEventListener("pointerdown", resumeAfterMobileGesture, { once: true });
+    return () => window.removeEventListener("pointerdown", resumeAfterMobileGesture);
+  }, [narration.enabled, narration.hasRecordedClip, narration.replay, narration.status, stage]);
 
   useEffect(() => {
     if (stage !== "game") return;
@@ -1494,6 +1498,7 @@ export default function Prototype() {
       skillName: martialSoul.initialSkill.name,
       skillDescription: martialSoul.initialSkill.description,
     };
+    const openingNarration = buildOpeningNarration(martialSoul);
     const base = {
       ...initialGame,
       name: name.trim() || "无名",
@@ -1504,12 +1509,15 @@ export default function Prototype() {
       martialAttribute: martialSoul.attribute,
       soulRings: [firstRing],
       narrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}三天后，你带着学院推荐信来到诺丁城。雨后的青石路上，一串泛着蓝光的脚印正通向学院后门。`,
-      storyNarrative: `武魂觉醒仪式上，${martialSoul.name}在你掌心展开。${martialSoul.description}三天后，你带着学院推荐信来到诺丁城。雨后的青石路上，一串泛着蓝光的脚印正通向学院后门。你的入学之日，也因此成为命运改变的起点。`,
+      storyNarrative: openingNarration,
+      storyNarrationClipId: `opening-${martialSoul.id}`,
       storyNote: `${martialSoul.identity} · 初始魂技：${martialSoul.initialSkill.name}`,
     };
     const nextGame = { ...base, currentHp: getStats(base).maxHp };
     keyboard.hide();
     setSession(createSession(nextGame));
+    lastNarrationKeyRef.current = `${nextGame.currentStoryNodeId}:${nextGame.storyNarrative}`;
+    narration.speak(openingNarration, narrationClipUrl(nextGame.storyNarrationClipId));
     music.playEvent("martial_soul_awakened");
     window.setTimeout(() => {
       resetPhoneViewport();
@@ -1520,7 +1528,7 @@ export default function Prototype() {
 
   const startPrologue = () => {
     keyboard.hide();
-    narration.speak(PROLOGUE_NARRATION);
+    narration.speak(PROLOGUE_NARRATION, narrationClipUrl("prologue"));
     setStage("prologue");
   };
 
@@ -1656,6 +1664,7 @@ export default function Prototype() {
         narrative: "熟悉的雨再次落在诺丁城。你不记得上一条时间线的所有细节，却知道这一次，每个选择都可能把大陆带向不同未来。",
         note: "已发现的结局会保留在档案中；新的剧情状态从诺丁城重新开始。",
         storyNarrative: "熟悉的雨再次落在诺丁城。你不记得上一条时间线的所有细节，却知道这一次，每个选择都可能把大陆带向不同未来。",
+        storyNarrationClipId: "timeline-restart",
         storyNote: "已发现的结局会保留在档案中；新的剧情状态从诺丁城重新开始。",
       }),
       { title: "开启新的剧情时间线", summary: `保留 ${game.completedEndings.length} 个已发现结局，重新回到诺丁城。` },
@@ -1854,6 +1863,7 @@ export default function Prototype() {
           narrative: response.narrative,
           note: response.note,
           storyNarrative: response.narrative,
+          storyNarrationClipId: null,
           storyNote: response.note,
           lastStoryChange: `${getCharacter(action.characterId).name}主动行动 · 已回应`,
         };
@@ -2270,6 +2280,7 @@ export default function Prototype() {
     setSelectedCharacterId(null);
     setSelectedItem(null);
     setCombat(null);
+    setResetConfirmOpen(false);
     setSession(createSession(initialGame));
     setGameCreationDefaults();
     setStage("welcome");
@@ -2297,7 +2308,7 @@ export default function Prototype() {
           <PrologueScreen
             narrationEnabled={narration.enabled}
             narrationStatus={narration.status}
-            narrationSupported={narration.supported}
+            narrationSupported={narration.currentSupported}
             onToggleNarration={narration.toggleEnabled}
             onPauseOrResume={narration.pauseOrResume}
             onReplay={narration.replay}
@@ -2325,7 +2336,7 @@ export default function Prototype() {
                 musicReady={music.ready}
                 narrationEnabled={narration.enabled}
                 narrationStatus={narration.status}
-                narrationSupported={narration.supported}
+                narrationSupported={narration.currentSupported}
                 onChoose={chooseStory}
                 onCustom={() => setCustomOpen(true)}
                 onToggleMusic={music.toggleMuted}
@@ -2370,7 +2381,10 @@ export default function Prototype() {
                 onToggleNarration={narration.toggleEnabled}
                 onSave={saveNow}
                 onRewind={rewindTo}
-                onReset={resetGame}
+                onReset={() => {
+                  keyboard.hide();
+                  setResetConfirmOpen(true);
+                }}
               />
             ) : null}
           </main>
@@ -2407,6 +2421,23 @@ export default function Prototype() {
           {toast}
         </div>
       ) : null}
+
+      <BottomSheet
+        open={resetConfirmOpen}
+        onOpenChange={setResetConfirmOpen}
+        title="确认重新创建角色？"
+        description="这是不可撤销的清档操作，请确认后再继续。"
+        snap={0.42}
+      >
+        <div className="reset-confirm-sheet">
+          <div className="reset-warning">
+            <ExclamationTriangleIcon aria-hidden="true" />
+            <p><strong>当前角色进度将被清除</strong><span>角色属性、剧情时间线、已发现结局、关系、行囊和战斗记录都会从当前设备删除。</span></p>
+          </div>
+          <button className="confirm-reset-button" type="button" onClick={resetGame}>确认清除并重新创建</button>
+          <button className="secondary-sheet-button" type="button" onClick={() => setResetConfirmOpen(false)}>取消，保留当前角色</button>
+        </div>
+      </BottomSheet>
 
       <BottomSheet
         open={Boolean(selectedWorldEvent)}
